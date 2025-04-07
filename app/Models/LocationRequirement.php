@@ -104,6 +104,12 @@ class LocationRequirement extends Model
      */
     public function getCurrentValue(Character $character): ?int
     {
+        // Атрибуты персонажа, которые можно получить напрямую
+        $characterAttributes = [
+            'strength', 'agility', 'intelligence', 'vitality',
+            'luck', 'charisma', 'wisdom', 'dexterity', 'constitution'
+        ];
+
         switch ($this->type) {
             case self::TYPE_LEVEL:
                 return $character->level;
@@ -114,8 +120,13 @@ class LocationRequirement extends Model
             case self::TYPE_ATTRIBUTE:
                 return $character->{$this->parameter};
 
-            // Другие типы требований будут реализованы позже
+            // Обработка прямых типов атрибутов
             default:
+                // Если тип требования совпадает с одним из атрибутов персонажа
+                if (in_array($this->type, $characterAttributes)) {
+                    return $character->{$this->type};
+                }
+
                 return null;
         }
     }
@@ -130,6 +141,19 @@ class LocationRequirement extends Model
         if (!empty($this->description)) {
             return $this->description;
         }
+
+        // Локализованные названия атрибутов
+        $attributeNames = [
+            'strength' => 'Сила',
+            'agility' => 'Ловкость',
+            'intelligence' => 'Интеллект',
+            'vitality' => 'Выносливость',
+            'luck' => 'Удача',
+            'charisma' => 'Харизма',
+            'wisdom' => 'Мудрость',
+            'dexterity' => 'Проворство',
+            'constitution' => 'Телосложение',
+        ];
 
         switch ($this->type) {
             case self::TYPE_LEVEL:
@@ -151,7 +175,9 @@ class LocationRequirement extends Model
                 return "Требуется репутация с {$this->parameter}: {$this->value}";
 
             case self::TYPE_ATTRIBUTE:
-                return "Требуется {$this->parameter}: {$this->value}";
+                // Используем локализованное название атрибута, если доступно
+                $attributeName = $attributeNames[$this->parameter] ?? $this->parameter;
+                return "Требуется {$attributeName}: {$this->value}";
 
             default:
                 return "Неизвестное требование";

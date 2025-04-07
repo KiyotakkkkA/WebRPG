@@ -20,13 +20,18 @@ class LoginController extends Controller
         ]);
 
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
+            // Регенерируем сессию для защиты от атак фиксации сессии
             $request->session()->regenerate();
+
+            // Явно обновляем CSRF токен
+            $newToken = csrf_token();
 
             $user = Auth::user();
 
             return response()->json([
                 'user' => $user,
-                'message' => 'Вход выполнен успешно'
+                'message' => 'Вход выполнен успешно',
+                'csrf_token' => $newToken // Отправляем новый токен клиенту
             ]);
         }
 
@@ -40,13 +45,16 @@ class LoginController extends Controller
      */
     public function logout(Request $request)
     {
-        Auth::logout();
+        Auth::guard('web')->logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
+        $newToken = csrf_token();
+
         return response()->json([
-            'message' => 'Выход выполнен успешно'
+            'message' => 'Выход выполнен успешно',
+            'csrf_token' => $newToken
         ]);
     }
 

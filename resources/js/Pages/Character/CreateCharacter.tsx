@@ -312,6 +312,10 @@ const CreateCharacter: React.FC = observer(() => {
                                     className={`w-full p-3 bg-gray-800/80 backdrop-blur-sm border ${
                                         errors.name
                                             ? "border-red-500"
+                                            : characterName.trim().length >=
+                                                  3 &&
+                                              characterName.trim().length <= 20
+                                            ? "border-green-500"
                                             : "border-gray-700"
                                     } rounded-md text-gray-300 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500`}
                                     value={characterName}
@@ -331,6 +335,13 @@ const CreateCharacter: React.FC = observer(() => {
                                         {errors.name}
                                     </p>
                                 )}
+                                {!errors.name &&
+                                    characterName.trim().length >= 3 &&
+                                    characterName.trim().length <= 20 && (
+                                        <p className="text-green-500 text-xs mt-1">
+                                            Корректное имя персонажа ✓
+                                        </p>
+                                    )}
                             </div>
 
                             {/* Заголовок для выбора класса */}
@@ -338,7 +349,7 @@ const CreateCharacter: React.FC = observer(() => {
                                 <h2 className="text-red-500 text-2xl font-medieval">
                                     Выберите класс
                                 </h2>
-                                <p className="text-gray-400">
+                                <p className="text-gray-400 mb-2">
                                     Каждый класс обладает уникальными
                                     способностями и стилем игры
                                 </p>
@@ -346,6 +357,20 @@ const CreateCharacter: React.FC = observer(() => {
                                     <p className="text-red-500 text-sm mt-2">
                                         {errors.class}
                                     </p>
+                                )}
+                                {selectedClass && (
+                                    <div className="flex items-center justify-center text-green-500 text-sm mt-2">
+                                        <span className="mr-2">✓</span>
+                                        <span>
+                                            Выбран класс:{" "}
+                                            {
+                                                characterClasses.find(
+                                                    (c) =>
+                                                        c.id === selectedClass
+                                                )?.title
+                                            }
+                                        </span>
+                                    </div>
                                 )}
                             </div>
 
@@ -371,25 +396,52 @@ const CreateCharacter: React.FC = observer(() => {
                                 ))}
                             </div>
 
-                            {/* Ошибки и кнопка создания */}
-                            <div className="max-w-md mx-auto">
+                            {/* Создание персонажа */}
+                            <div className="max-w-md mx-auto mt-10">
                                 {errors.general && (
                                     <div className="bg-red-900/30 border border-red-500 text-red-400 px-4 py-3 rounded-md mb-4">
                                         {errors.general}
                                     </div>
                                 )}
 
+                                {/* Информация о готовности к созданию */}
+                                {selectedClass &&
+                                    characterName.trim().length >= 3 &&
+                                    characterName.trim().length <= 20 && (
+                                        <div className="bg-green-900/30 border border-green-700 text-green-400 px-4 py-3 rounded-md mb-4">
+                                            <p className="flex items-center">
+                                                <span className="mr-2">✓</span>
+                                                Все готово для создания
+                                                персонажа
+                                            </p>
+                                        </div>
+                                    )}
+
                                 <div className="flex justify-between">
                                     <Button
                                         variant="secondary"
+                                        type="button"
                                         onClick={() => navigate("/")}
                                     >
                                         Отмена
                                     </Button>
                                     <Button
                                         variant="primary"
-                                        onClick={handleSubmit}
-                                        disabled={characterStore.isLoading}
+                                        type="submit"
+                                        disabled={
+                                            characterStore.isLoading ||
+                                            !selectedClass ||
+                                            !characterName.trim() ||
+                                            characterName.trim().length < 3 ||
+                                            characterName.trim().length > 20
+                                        }
+                                        className={`${
+                                            selectedClass &&
+                                            characterName.trim().length >= 3 &&
+                                            characterName.trim().length <= 20
+                                                ? "animate-pulse"
+                                                : ""
+                                        }`}
                                     >
                                         {characterStore.isLoading ? (
                                             <span className="flex items-center">

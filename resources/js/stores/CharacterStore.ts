@@ -25,6 +25,7 @@ interface Character {
     dexterity: number;
     constitution: number;
     is_active: boolean;
+    is_new: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -83,6 +84,28 @@ class CharacterStore {
         }
 
         try {
+            // Обновляем CSRF-токен перед важными операциями, чтобы избежать ошибки 419
+            try {
+                // Запрашиваем новый CSRF-токен
+                await axios.get("/sanctum/csrf-cookie");
+
+                // Обновляем CSRF-токен в заголовках axios
+                const csrfToken =
+                    document.head
+                        .querySelector('meta[name="csrf-token"]')
+                        ?.getAttribute("content") || "";
+
+                if (csrfToken) {
+                    axios.defaults.headers.common["X-CSRF-TOKEN"] = csrfToken;
+                }
+            } catch (csrfError) {
+                console.warn(
+                    "Не удалось обновить CSRF-токен, продолжаем с текущим токеном:",
+                    csrfError
+                );
+            }
+
+            // Выполняем основной запрос на создание персонажа
             const response = await axios.post("/api/characters", {
                 name,
                 class: characterClass,
@@ -98,9 +121,14 @@ class CharacterStore {
             return response.data.character;
         } catch (error: any) {
             runInAction(() => {
-                this.error =
-                    error.response?.data?.message ||
-                    "Ошибка создания персонажа";
+                if (error.response?.status === 419) {
+                    this.error =
+                        "Истек срок действия сессии. Пожалуйста, обновите страницу и попробуйте снова.";
+                } else {
+                    this.error =
+                        error.response?.data?.message ||
+                        "Ошибка создания персонажа";
+                }
             });
             return null;
         } finally {

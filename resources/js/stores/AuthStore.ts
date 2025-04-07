@@ -5,6 +5,7 @@ interface User {
     id: number;
     name: string;
     email: string;
+    role: string;
 }
 
 class AuthStore {
@@ -41,6 +42,11 @@ class AuthStore {
         }
     }
 
+    // Проверка, является ли пользователь администратором
+    get isAdmin(): boolean {
+        return this.user?.role === "admin";
+    }
+
     // Вход в систему
     async login(email: string, password: string, remember: boolean = false) {
         this.isLoading = true;
@@ -51,6 +57,21 @@ class AuthStore {
                 password,
                 remember,
             });
+
+            // Если сервер вернул новый CSRF-токен, обновляем его в заголовках axios
+            if (response.data.csrf_token) {
+                axios.defaults.headers.common["X-CSRF-TOKEN"] =
+                    response.data.csrf_token;
+
+                // Обновляем также мета-тег, чтобы новый токен был доступен для будущих запросов
+                const metaTag = document.head.querySelector(
+                    'meta[name="csrf-token"]'
+                );
+                if (metaTag) {
+                    metaTag.setAttribute("content", response.data.csrf_token);
+                }
+            }
+
             runInAction(() => {
                 this.user = response.data.user;
                 this.isAuthenticated = true;
@@ -88,6 +109,21 @@ class AuthStore {
                 password,
                 password_confirmation,
             });
+
+            // Если сервер вернул новый CSRF-токен, обновляем его в заголовках axios
+            if (response.data.csrf_token) {
+                axios.defaults.headers.common["X-CSRF-TOKEN"] =
+                    response.data.csrf_token;
+
+                // Обновляем также мета-тег, чтобы новый токен был доступен для будущих запросов
+                const metaTag = document.head.querySelector(
+                    'meta[name="csrf-token"]'
+                );
+                if (metaTag) {
+                    metaTag.setAttribute("content", response.data.csrf_token);
+                }
+            }
+
             runInAction(() => {
                 this.user = response.data.user;
                 this.isAuthenticated = true;
@@ -113,7 +149,18 @@ class AuthStore {
     async logout() {
         this.isLoading = true;
         try {
-            await axios.post("/api/logout");
+            const response = await axios.post("/api/logout");
+            if (response.data.csrf_token) {
+                axios.defaults.headers.common["X-CSRF-TOKEN"] =
+                    response.data.csrf_token;
+
+                const csrfMeta = document.querySelector(
+                    'meta[name="csrf-token"]'
+                );
+                if (csrfMeta) {
+                    csrfMeta.setAttribute("content", response.data.csrf_token);
+                }
+            }
             runInAction(() => {
                 this.user = null;
                 this.isAuthenticated = false;

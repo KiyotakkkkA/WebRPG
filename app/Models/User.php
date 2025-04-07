@@ -23,6 +23,7 @@ class User extends Authenticatable
         'email',
         'password',
         'max_characters',
+        'role',
     ];
 
     /**
@@ -72,5 +73,21 @@ class User extends Authenticatable
     {
         $currentCount = $this->characters()->count();
         return max(0, $this->max_characters - $currentCount);
+    }
+
+    /**
+     * Проверить, является ли пользователь администратором
+     */
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    /**
+     * Проверить, имеет ли пользователь указанную роль
+     */
+    public function hasRole(string $role): bool
+    {
+        return $this->role === $role;
     }
 }

@@ -75,7 +75,22 @@ class CharacterController extends Controller
             'dexterity' => $baseStats['dexterity'],
             'constitution' => $baseStats['constitution'],
             'is_active' => true,
+            'is_new' => true,
         ]);
+
+        // Устанавливаем начальную локацию для персонажа (локация по умолчанию)
+        $defaultLocation = \App\Models\Location::where('is_default', true)->first();
+        if ($defaultLocation) {
+            $character->current_location_id = $defaultLocation->id;
+            $character->save();
+
+            // Добавляем локацию в открытые для персонажа
+            \DB::table('character_discovered_locations')->insert([
+                'character_id' => $character->id,
+                'location_id' => $defaultLocation->id,
+                'discovered_at' => now()
+            ]);
+        }
 
         return response()->json([
             'message' => 'Персонаж успешно создан',
@@ -190,6 +205,40 @@ class CharacterController extends Controller
             'message' => "Скорость персонажа увеличена на {$request->boost_amount} на {$request->duration} секунд",
             'character' => $character,
             'boost_expires_at' => now()->addSeconds($request->duration)->toDateTimeString()
+        ]);
+    }
+
+    /**
+     * Отметить, что персонаж завершил туториал
+     */
+    public function tutorialCompleted(Request $request)
+    {
+        $characterId = $request->input('character_id');
+
+        if (!$characterId) {
+            return response()->json([
+                'message' => 'Идентификатор персонажа не указан'
+            ], 400);
+        }
+
+        $character = Character::findOrFail($characterId);
+
+        // Проверяем, принадлежит ли персонаж текущему пользователю
+        if ($character->user_id !== Auth::id()) {
+            return response()->json([
+                'message' => 'Доступ запрещен'
+            ], 403);
+        }
+
+        // Сбрасываем флаг "новый персонаж"
+        $character->is_new = false;
+        $character->save();
+
+        \Log::info("Персонаж ID: {$character->id} завершил туториал и больше не считается новым");
+
+        return response()->json([
+            'message' => 'Туториал завершен успешно',
+            'character' => $character
         ]);
     }
 }

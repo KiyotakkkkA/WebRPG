@@ -30,9 +30,16 @@ class RegisterController extends Controller
 
         Auth::login($user);
 
+        // Регенерируем сессию для безопасности
+        $request->session()->regenerate();
+
+        // Явно обновляем CSRF токен
+        $newToken = csrf_token();
+
         return response()->json([
             'user' => $user,
-            'message' => 'Регистрация выполнена успешно'
+            'message' => 'Регистрация выполнена успешно',
+            'csrf_token' => $newToken // Отправляем новый токен клиенту
         ]);
     }
 }

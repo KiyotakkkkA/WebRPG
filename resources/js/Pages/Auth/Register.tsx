@@ -223,6 +223,7 @@ const Register: React.FC = observer(() => {
                                     disabled={
                                         authStore.isLoading || !agreeToTerms
                                     }
+                                    type="submit"
                                 >
                                     {authStore.isLoading ? (
                                         <span className="flex items-center justify-center">

@@ -14,6 +14,7 @@ interface ButtonProps {
     onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
     disabled?: boolean;
     fullWidth?: boolean;
+    type?: "button" | "submit" | "reset"; // Добавляем тип кнопки
 }
 
 const Button: React.FC<ButtonProps> = ({
@@ -26,6 +27,7 @@ const Button: React.FC<ButtonProps> = ({
     onClick,
     disabled = false,
     fullWidth = false,
+    type = "button", // По умолчанию тип "button"
 }) => {
     const baseClasses =
         "inline-flex items-center justify-center font-medium transition-all duration-200 relative overflow-hidden group";
@@ -96,7 +98,12 @@ const Button: React.FC<ButtonProps> = ({
     }
 
     return (
-        <button onClick={onClick} disabled={disabled} className={buttonClasses}>
+        <button
+            onClick={onClick}
+            disabled={disabled}
+            className={buttonClasses}
+            type={type}
+        >
             {children}
             {decorativeElements}
             {rippleEffect}

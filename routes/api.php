@@ -5,8 +5,15 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\CharacterController;
 use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\LocationController;
+use App\Http\Controllers\Admin\AdminController;
+use App\Http\Controllers\Admin\AdminLocationController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+
+// Маршрут для обновления CSRF-токена
+Route::get('/refresh-csrf', function () {
+    return response()->json(['message' => 'CSRF token refreshed successfully']);
+});
 
 // Публичные маршруты для аутентификации и статистики - добавляем middleware web для поддержки сессий
 Route::middleware(['web'])->group(function () {
@@ -29,10 +36,36 @@ Route::middleware(['web', 'auth:sanctum'])->group(function () {
     Route::put('/characters/{character}', [CharacterController::class, 'update']);
     Route::delete('/characters/{character}', [CharacterController::class, 'destroy']);
     Route::post('/characters/{character}/boost-speed', [CharacterController::class, 'boostSpeed']);
+    Route::post('/characters/tutorial-completed', [CharacterController::class, 'tutorialCompleted']);
 
     // Маршруты для работы с локациями
     Route::get('/locations', [LocationController::class, 'getAvailableLocations']);
     Route::get('/locations/connections', [LocationController::class, 'getLocationConnections']);
     Route::get('/locations/{location}', [LocationController::class, 'getLocation']);
     Route::post('/locations/move', [LocationController::class, 'moveToLocation']);
+});
+
+// Маршруты для админ-панели (требуют роли admin)
+Route::middleware(['web', 'auth:sanctum', 'role:role:admin'])->prefix('admin')->group(function () {
+    // Получение информации для дэшборда админа
+    Route::get('/dashboard', [AdminController::class, 'dashboard']);
+
+    // Управление локациями
+    Route::get('/locations', [AdminLocationController::class, 'index']);
+    Route::post('/locations', [AdminLocationController::class, 'store']);
+    Route::get('/locations/{location}', [AdminLocationController::class, 'show']);
+    Route::put('/locations/{location}', [AdminLocationController::class, 'update']);
+    Route::delete('/locations/{location}', [AdminLocationController::class, 'destroy']);
+
+    // Управление соединениями между локациями
+    Route::get('/location-connections', [AdminLocationController::class, 'getConnections']);
+    Route::post('/location-connections', [AdminLocationController::class, 'createConnection']);
+    Route::put('/location-connections/{connection}', [AdminLocationController::class, 'updateConnection']);
+    Route::delete('/location-connections/{connection}', [AdminLocationController::class, 'deleteConnection']);
+
+    // Управление требованиями для локаций
+    Route::get('/location-requirements/{location}', [AdminLocationController::class, 'getRequirements']);
+    Route::post('/location-requirements', [AdminLocationController::class, 'createRequirement']);
+    Route::put('/location-requirements/{requirement}', [AdminLocationController::class, 'updateRequirement']);
+    Route::delete('/location-requirements/{requirement}', [AdminLocationController::class, 'deleteRequirement']);
 });

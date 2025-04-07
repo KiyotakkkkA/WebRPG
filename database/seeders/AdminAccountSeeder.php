@@ -18,6 +18,7 @@ class AdminAccountSeeder extends Seeder
             'name' => 'Admin',
             'email' => 'a@a.a',
             'password' => Hash::make('admin'),
+            'role' => 'admin',
         ]);
     }
 }

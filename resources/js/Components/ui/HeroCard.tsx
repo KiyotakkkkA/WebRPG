@@ -130,6 +130,72 @@ const HeroCard: React.FC<HeroCardProps> = ({
                 hover:shadow-red-500/20 hover:translate-y-[-2px]
             `}
         >
+            {/* Огненная рамка для выбранного героя */}
+            {isSelected && (
+                <>
+                    <div className="absolute inset-0 z-0 rounded-lg overflow-hidden pointer-events-none">
+                        <div className="absolute inset-x-0 -top-1 h-2 bg-gradient-to-r from-orange-600 via-red-600 to-orange-600 animate-pulse"></div>
+                        <div className="absolute inset-x-0 -bottom-1 h-2 bg-gradient-to-r from-orange-600 via-red-600 to-orange-600 animate-pulse"></div>
+                        <div className="absolute inset-y-0 -left-1 w-2 bg-gradient-to-b from-orange-600 via-red-600 to-orange-600 animate-pulse"></div>
+                        <div className="absolute inset-y-0 -right-1 w-2 bg-gradient-to-b from-orange-600 via-red-600 to-orange-600 animate-pulse"></div>
+
+                        {/* Угловые эффекты огня */}
+                        <div className="absolute -top-2 -left-2 w-8 h-8">
+                            <div
+                                className="w-4 h-4 bg-red-500 rounded-full blur-[3px] absolute animate-ping"
+                                style={{ animationDuration: "1.5s" }}
+                            ></div>
+                            <div
+                                className="w-3 h-3 bg-orange-500 rounded-full blur-[2px] absolute animate-ping"
+                                style={{
+                                    animationDuration: "1.8s",
+                                    animationDelay: "0.1s",
+                                }}
+                            ></div>
+                        </div>
+                        <div className="absolute -top-2 -right-2 w-8 h-8">
+                            <div
+                                className="w-4 h-4 bg-red-500 rounded-full blur-[3px] absolute animate-ping"
+                                style={{ animationDuration: "1.7s" }}
+                            ></div>
+                            <div
+                                className="w-3 h-3 bg-orange-500 rounded-full blur-[2px] absolute animate-ping"
+                                style={{
+                                    animationDuration: "2s",
+                                    animationDelay: "0.2s",
+                                }}
+                            ></div>
+                        </div>
+                        <div className="absolute -bottom-2 -left-2 w-8 h-8">
+                            <div
+                                className="w-4 h-4 bg-red-500 rounded-full blur-[3px] absolute animate-ping"
+                                style={{ animationDuration: "1.6s" }}
+                            ></div>
+                            <div
+                                className="w-3 h-3 bg-orange-500 rounded-full blur-[2px] absolute animate-ping"
+                                style={{
+                                    animationDuration: "1.9s",
+                                    animationDelay: "0.3s",
+                                }}
+                            ></div>
+                        </div>
+                        <div className="absolute -bottom-2 -right-2 w-8 h-8">
+                            <div
+                                className="w-4 h-4 bg-red-500 rounded-full blur-[3px] absolute animate-ping"
+                                style={{ animationDuration: "1.8s" }}
+                            ></div>
+                            <div
+                                className="w-3 h-3 bg-orange-500 rounded-full blur-[2px] absolute animate-ping"
+                                style={{
+                                    animationDuration: "2.1s",
+                                    animationDelay: "0.4s",
+                                }}
+                            ></div>
+                        </div>
+                    </div>
+                </>
+            )}
+
             {/* Декоративные элементы */}
             <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-red-500/60"></div>
             <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-red-500/60"></div>

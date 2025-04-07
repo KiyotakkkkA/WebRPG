@@ -17,8 +17,6 @@ class LocationsSeeder extends Seeder
         // Временно отключаем проверку внешних ключей
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
 
-        // Очищаем существующие данные
-        DB::table('location_connections')->truncate();
         DB::table('location_requirements')->truncate();
         DB::table('location_objects')->truncate(); // Добавляем очистку объектов
         DB::table('character_discovered_locations')->truncate(); // Очищаем связи персонажей с локациями
@@ -33,7 +31,7 @@ class LocationsSeeder extends Seeder
                 'id' => 1,
                 'name' => 'Лагерь выживших',
                 'description' => 'Защищенное место, где собираются те, кто смог пережить первые дни проклятия.',
-                'image_url' => '/images/locations/novice-camp.jpg',
+                'image_url' => 'images/locations/novice-camp.jpg',
                 'danger_level' => 1,
                 'is_default' => true,
                 'is_discoverable' => true,
@@ -44,7 +42,7 @@ class LocationsSeeder extends Seeder
                 'id' => 2,
                 'name' => 'Леса Теней',
                 'description' => 'Древние леса, где деревья шепчут тайны прошлого и скрывают многочисленные опасности.',
-                'image_url' => '/images/locations/shadow-woods.jpg',
+                'image_url' => 'images/locations/shadow-woods.jpg',
                 'danger_level' => 3,
                 'is_default' => false,
                 'is_discoverable' => true,
@@ -55,7 +53,7 @@ class LocationsSeeder extends Seeder
                 'id' => 3,
                 'name' => 'Забытые руины',
                 'description' => 'Останки древней цивилизации, полные артефактов и смертельных ловушек.',
-                'image_url' => '/images/locations/forgotten-ruins.jpg',
+                'image_url' => 'images/locations/forgotten-ruins.jpg',
                 'danger_level' => 5,
                 'is_default' => false,
                 'is_discoverable' => true,
@@ -66,7 +64,7 @@ class LocationsSeeder extends Seeder
                 'id' => 4,
                 'name' => 'Кровавые копи',
                 'description' => 'Заброшенные шахты, где добывали редкие кристаллы. Теперь там обитают существа из бездны.',
-                'image_url' => '/images/locations/blood-mines.jpg',
+                'image_url' => 'images/locations/blood-mines.jpg',
                 'danger_level' => 7,
                 'is_default' => false,
                 'is_discoverable' => true,
@@ -79,36 +77,6 @@ class LocationsSeeder extends Seeder
         foreach ($locations as $locationData) {
             Location::create($locationData);
         }
-
-        // Создаем соединения между локациями
-        $connections = [
-            [
-                'from_location_id' => 1, // Лагерь выживших -> Леса Теней
-                'to_location_id' => 2,
-                'is_bidirectional' => true,
-                'travel_time' => 10, // Увеличиваем время путешествия
-            ],
-            [
-                'from_location_id' => 2, // Леса Теней -> Забытые руины
-                'to_location_id' => 3,
-                'is_bidirectional' => true,
-                'travel_time' => 15, // Увеличиваем время путешествия
-            ],
-            [
-                'from_location_id' => 3, // Забытые руины -> Кровавые копи
-                'to_location_id' => 4,
-                'is_bidirectional' => false,
-                'travel_time' => 20, // Увеличиваем время путешествия
-            ],
-            [
-                'from_location_id' => 4, // Кровавые копи -> Лагерь выживших
-                'to_location_id' => 1,
-                'is_bidirectional' => true,
-                'travel_time' => 25, // Увеличиваем время путешествия
-            ],
-        ];
-
-        DB::table('location_connections')->insert($connections);
 
         // Создаем требования для локаций
         $requirements = [

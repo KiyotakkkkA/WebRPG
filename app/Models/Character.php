@@ -39,6 +39,8 @@ class Character extends Model
         'dexterity',
         'constitution',
         'is_active',
+        'current_location_id',
+        'is_new',
     ];
 
     /**
@@ -67,6 +69,7 @@ class Character extends Model
         'dexterity' => 'integer',
         'constitution' => 'integer',
         'is_active' => 'boolean',
+        'is_new' => 'boolean',
     ];
 
     /**
@@ -75,6 +78,14 @@ class Character extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Получить текущую локацию персонажа.
+     */
+    public function currentLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'current_location_id');
     }
 
     /**

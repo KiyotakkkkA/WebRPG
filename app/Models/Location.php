@@ -43,6 +43,14 @@ class Location extends Model
     ];
 
     /**
+     * Получить персонажей, находящихся в этой локации.
+     */
+    public function characters(): HasMany
+    {
+        return $this->hasMany(Character::class, 'current_location_id');
+    }
+
+    /**
      * Получить локации, связанные с данной локацией (куда можно перейти).
      */
     public function connectedLocations(): BelongsToMany

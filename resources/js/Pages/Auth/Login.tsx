@@ -54,7 +54,7 @@ const Login: React.FC = observer(() => {
         <MainLayout>
             <div className="relative min-h-[calc(100vh-200px)] flex items-center justify-center py-12">
                 {/* Фоновое изображение */}
-                <div className="absolute inset-0 bg-[url('/images/backgrounds/Login.jpg')] bg-cover bg-center opacity-40"></div>
+                <div className="absolute inset-0 bg-[url('/images/backgrounds/login_bg.jpg')] bg-cover bg-center opacity-40"></div>
                 <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/80 to-gray-900/60 backdrop-blur-[2px]"></div>
 
                 {/* Декоративные элементы */}
@@ -174,6 +174,7 @@ const Login: React.FC = observer(() => {
                                     variant="primary"
                                     fullWidth
                                     disabled={authStore.isLoading}
+                                    type="submit"
                                 >
                                     {authStore.isLoading ? (
                                         <span className="flex items-center justify-center">

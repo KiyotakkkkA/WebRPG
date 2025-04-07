@@ -24,6 +24,7 @@ import LocationMap from "../../Components/game/LocationMap";
 import { Dialog, Transition } from "@headlessui/react";
 import { runInAction } from "mobx";
 import TravelModal from "../../Components/game/TravelModal";
+import axios from "axios";
 
 // Интерфейс для врага
 interface Enemy {
@@ -111,6 +112,55 @@ const LocationRequirement: React.FC<{
         gold: "💰",
         item: "🎒",
         attribute: "💪",
+        strength: "💪",
+        agility: "🏃",
+        intelligence: "🧠",
+        vitality: "❤️",
+        luck: "🍀",
+        charisma: "👄",
+        wisdom: "📚",
+        dexterity: "✋",
+        constitution: "🛡️",
+    };
+
+    // Локализация названий атрибутов
+    const getAttributeName = (attribute: string): string => {
+        const attributeNames: Record<string, string> = {
+            level: "Уровень",
+            quest: "Квест",
+            skill: "Навык",
+            gold: "Золото",
+            item: "Предмет",
+            attribute: "Атрибут",
+            strength: "Сила",
+            agility: "Ловкость",
+            intelligence: "Интеллект",
+            vitality: "Выносливость",
+            luck: "Удача",
+            charisma: "Харизма",
+            wisdom: "Мудрость",
+            dexterity: "Проворство",
+            constitution: "Телосложение",
+        };
+
+        return attributeNames[attribute] || attribute;
+    };
+
+    // Формирование читаемого текста требования
+    const getRequirementText = (): string => {
+        // Используем уже подготовленное описание, если оно есть
+        if (requirement.description) {
+            return requirement.description;
+        }
+
+        // Если описания нет, формируем его на основе типа требования и параметра
+        if (requirement.type === "attribute") {
+            const attributeName = getAttributeName(requirement.parameter);
+            return `${attributeName} ${requirement.value}`;
+        } else {
+            // Для других типов требований
+            return `${getAttributeName(requirement.type)} ${requirement.value}`;
+        }
     };
 
     return (
@@ -120,11 +170,13 @@ const LocationRequirement: React.FC<{
             }`}
         >
             <span className="mr-1">
-                {requirementIcons[requirement.type] || "❓"}
+                {requirementIcons[requirement.type] ||
+                    requirementIcons[requirement.parameter] ||
+                    "❓"}
             </span>
-            <span>{requirement.description}</span>
+            <span>{getRequirementText()}</span>
             {requirement.current_value !== undefined && (
-                <span className="ml-1">
+                <span className="ml-1 font-medium">
                     ({requirement.current_value}/{requirement.value})
                 </span>
             )}
@@ -289,6 +341,172 @@ const JournalEntryItem: React.FC<{ entry: JournalEntry }> = ({ entry }) => {
     );
 };
 
+// Вспомогательная функция для формирования правильного URL изображения
+const getImageUrl = (imagePath: string) => {
+    if (!imagePath)
+        return (
+            window.location.origin + "/images/locations/fallback-location.jpg"
+        );
+
+    // Если путь уже начинается с http или https, оставляем как есть
+    if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+        return imagePath;
+    }
+
+    // Если путь начинается с /, добавляем только origin
+    if (imagePath.startsWith("/")) {
+        return window.location.origin + imagePath;
+    }
+
+    // Иначе добавляем origin и /
+    return window.location.origin + "/" + imagePath;
+};
+
+// Добавляем модальное окно для обучения выше определения компонента GameInterface
+const TutorialModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    characterName: string;
+    characterId: number;
+}> = ({ isOpen, onClose, characterName, characterId }) => {
+    const [currentStep, setCurrentStep] = React.useState(0);
+
+    const tutorialSteps = [
+        {
+            title: "Добро пожаловать в Эхо Забвения!",
+            content: `${characterName}, вы только что прибыли в этот мрачный и опасный мир. Ваше выживание зависит от ваших решений и действий.`,
+            image: "/images/tutorial/welcome.jpg",
+        },
+        {
+            title: "Исследование локаций",
+            content:
+                "Вы можете перемещаться между локациями, используя карту или список доступных переходов. Будьте осторожны - не все локации безопасны!",
+            image: "/images/tutorial/locations.jpg",
+        },
+        {
+            title: "Взаимодействие с объектами",
+            content:
+                "В каждой локации могут находиться различные объекты - от построек и NPC до ресурсов и монстров. Нажмите на объект, чтобы взаимодействовать с ним.",
+            image: "/images/tutorial/objects.jpg",
+        },
+        {
+            title: "Журнал приключений",
+            content:
+                "Все ваши действия и важные события записываются в журнал. Обращайтесь к нему, если забыли, что происходило ранее.",
+            image: "/images/tutorial/journal.jpg",
+        },
+    ];
+
+    const handleClose = async () => {
+        try {
+            // Отправляем запрос на сброс флага is_new
+            await axios.post("/api/characters/tutorial-completed", {
+                character_id: characterId,
+            });
+        } catch (error) {}
+        onClose();
+    };
+
+    const nextStep = () => {
+        if (currentStep < tutorialSteps.length - 1) {
+            setCurrentStep(currentStep + 1);
+        } else {
+            handleClose();
+        }
+    };
+
+    const prevStep = () => {
+        if (currentStep > 0) {
+            setCurrentStep(currentStep - 1);
+        }
+    };
+
+    const step = tutorialSteps[currentStep];
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                <div
+                    className="fixed inset-0 transition-opacity"
+                    aria-hidden="true"
+                >
+                    <div className="absolute inset-0 bg-gray-900 opacity-75"></div>
+                </div>
+
+                <div className="inline-block align-bottom bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full">
+                    <div className="bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <div className="sm:flex sm:items-start">
+                            <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+                                <h3 className="text-2xl leading-6 font-medieval text-red-500 mb-4">
+                                    {step.title}
+                                </h3>
+
+                                <div className="my-4">
+                                    <img
+                                        src={step.image}
+                                        alt={step.title}
+                                        className="w-full h-64 object-cover rounded-md border border-gray-700"
+                                        onError={(e) => {
+                                            (e.target as HTMLImageElement).src =
+                                                "/images/fallback-location.jpg";
+                                        }}
+                                    />
+                                </div>
+
+                                <div className="mt-2">
+                                    <p className="text-gray-300 text-lg">
+                                        {step.content}
+                                    </p>
+                                </div>
+
+                                <div className="mt-5 flex justify-between">
+                                    <button
+                                        type="button"
+                                        onClick={prevStep}
+                                        disabled={currentStep === 0}
+                                        className={`inline-flex justify-center rounded-md border border-transparent px-4 py-2 text-base font-medium focus:outline-none sm:text-sm ${
+                                            currentStep === 0
+                                                ? "bg-gray-700 text-gray-500 cursor-not-allowed"
+                                                : "bg-red-900 text-white hover:bg-red-800"
+                                        }`}
+                                    >
+                                        Назад
+                                    </button>
+
+                                    <div className="flex space-x-2">
+                                        {tutorialSteps.map((_, index) => (
+                                            <div
+                                                key={index}
+                                                className={`w-2 h-2 rounded-full ${
+                                                    index === currentStep
+                                                        ? "bg-red-500"
+                                                        : "bg-gray-600"
+                                                }`}
+                                            ></div>
+                                        ))}
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={nextStep}
+                                        className="inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:text-sm"
+                                    >
+                                        {currentStep < tutorialSteps.length - 1
+                                            ? "Далее"
+                                            : "Начать игру"}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // Главный компонент игрового интерфейса
 const GameInterface: React.FC = observer(() => {
     const navigate = useNavigate();
@@ -326,6 +544,9 @@ const GameInterface: React.FC = observer(() => {
     const [locationConnections, setLocationConnections] = useState<
         LocationConnection[]
     >([]);
+
+    // Добавляем состояние для отображения туториала
+    const [showTutorial, setShowTutorial] = React.useState(false);
 
     // Список возможных врагов для локаций
     const locationEnemies: Record<string, Enemy[]> = {
@@ -429,271 +650,177 @@ const GameInterface: React.FC = observer(() => {
             setLoading(true);
             setError(null);
 
-            // Шаг 1: Загружаем персонажа, если он не загружен
-            if (!characterStore.selectedCharacter) {
-                try {
-                    await characterStore.loadCharacters();
+            journalStore.addEntry(
+                "Начинаем загрузку игрового мира...",
+                "system"
+            );
 
-                    if (characterStore.characters.length > 0) {
-                        await characterStore.loadCharacter(
-                            characterStore.characters[0].id
-                        );
-
-                        // Добавляем запись в журнал об успешной загрузке персонажа
+            try {
+                // Шаг 1: Загружаем выбранного персонажа
+                if (!characterStore.selectedCharacter) {
+                    try {
+                        await characterStore.loadCharacters();
+                        if (
+                            characterStore.characters &&
+                            characterStore.characters.length > 0
+                        ) {
+                            // Если есть активный персонаж, выбираем его
+                            const activeCharacter =
+                                characterStore.characters.find(
+                                    (char) => char.is_active
+                                );
+                            if (activeCharacter) {
+                                characterStore.selectCharacter(activeCharacter);
+                            } else {
+                                // Иначе выбираем первого персонажа
+                                characterStore.selectCharacter(
+                                    characterStore.characters[0]
+                                );
+                            }
+                        } else {
+                            journalStore.addEntry(
+                                "У вас нет персонажей. Создайте персонажа, чтобы начать игру."
+                            );
+                            setLoading(false);
+                            return;
+                        }
+                    } catch (err) {
                         journalStore.addEntry(
-                            "Персонаж успешно загружен",
-                            "system"
+                            "Ошибка при загрузке персонажа",
+                            "error"
                         );
-                    } else {
-                        setError(
-                            "У вас нет персонажей. Создайте персонажа, чтобы начать игру."
-                        );
+                        setError("Ошибка при загрузке персонажа");
                         setLoading(false);
                         return;
                     }
-                } catch (err) {
-                    journalStore.addEntry(
-                        "Ошибка при загрузке персонажа",
-                        "error"
-                    );
-                    setError("Ошибка при загрузке персонажа");
-                    setLoading(false);
-                    return;
                 }
-            }
 
-            // Шаг 2: Загружаем доступные локации
-            if (characterStore.selectedCharacter) {
-                try {
-                    const result = await locationStore.loadAvailableLocations(
-                        characterStore.selectedCharacter.id
+                // Проверка для новых персонажей
+                if (characterStore.selectedCharacter?.is_new) {
+                    journalStore.addEntry(
+                        `Добро пожаловать в мир Эхо Забвения, ${characterStore.selectedCharacter.name}! Это ваше первое приключение.`,
+                        "system"
                     );
 
-                    console.log("Данные локаций с сервера:", result);
+                    // Показываем обучающее модальное окно
+                    setShowTutorial(true);
 
-                    if (result) {
-                        // Используем явное приведение типа
-                        setActiveLocation(
-                            result.currentLocation as Location | null
+                    // Дополнительные действия для новых персонажей
+                    // Например, добавление стартовых предметов, установка начальной локации и т.д.
+                    journalStore.addEntry(
+                        "Ваше путешествие только начинается. Исследуйте мир, выполняйте задания и остерегайтесь опасностей.",
+                        "system"
+                    );
+
+                    // Можно вызвать специальный метод API для инициализации нового персонажа
+                    try {
+                        // TODO: Вызов API для инициализации нового персонажа, если необходимо
+                        // await axios.post("/api/characters/initialize", {
+                        //     character_id: characterStore.selectedCharacter.id
+                        // });
+                        // После успешной инициализации сбрасываем флаг is_new
+                        // Это будет реализовано в контроллере переходов между локациями
+                    } catch (error) {
+                        console.error(
+                            "Ошибка при инициализации нового персонажа:",
+                            error
                         );
+                    }
+                }
 
-                        // Если нет текущей локации, но есть доступные, выбираем первую
-                        if (
-                            !result.currentLocation &&
-                            locationStore.availableLocations.length > 0
-                        ) {
-                            setActiveLocation(
-                                locationStore.availableLocations[0]
-                            );
-                        }
-
-                        // Добавляем запись в журнал о текущей локации
-                        if (result.currentLocation) {
-                            journalStore.addEntry(
-                                `Вы находитесь в локации ${result.currentLocation.name}`,
-                                "location"
-                            );
-                        }
-
-                        // Шаг 3: Загружаем соединения между локациями
-                        try {
-                            console.log(
-                                "Начинаем загрузку соединений между локациями..."
-                            );
-                            const connections =
-                                await locationStore.loadLocationConnections();
-                            console.log(
-                                "Соединения локаций с сервера:",
-                                connections
+                // Шаг 2: Загружаем доступные локации
+                if (characterStore.selectedCharacter) {
+                    try {
+                        const result =
+                            await locationStore.loadAvailableLocations(
+                                characterStore.selectedCharacter.id
                             );
 
-                            if (connections && connections.length > 0) {
-                                console.log(
-                                    `Успешно загружено ${connections.length} соединений`
+                        if (result) {
+                            // Проверяем, что в ответе есть массив локаций
+                            if (
+                                result.availableLocations &&
+                                result.availableLocations.length > 0
+                            ) {
+                                // Логируем для отладки
+                                result.availableLocations.forEach(
+                                    (loc, index) => {}
                                 );
-                                setLocationConnections(connections);
+
+                                // Используем явное приведение типа
+                                setActiveLocation(
+                                    result.currentLocation as Location | null
+                                );
+
+                                // Если нет текущей локации, но есть доступные, выбираем первую
+                                if (
+                                    !result.currentLocation &&
+                                    locationStore.availableLocations.length > 0
+                                ) {
+                                    setActiveLocation(
+                                        locationStore.availableLocations[0]
+                                    );
+                                }
+
+                                // Добавляем запись в журнал о текущей локации
+                                if (result.currentLocation) {
+                                    journalStore.addEntry(
+                                        `Вы находитесь в локации ${result.currentLocation.name}`,
+                                        "location"
+                                    );
+                                }
                             } else {
-                                console.error(
-                                    "Не удалось загрузить соединения или список пуст!"
+                                console.warn(
+                                    "Сервер вернул пустой массив локаций"
                                 );
                                 journalStore.addEntry(
-                                    "Не удалось загрузить данные о соединениях между локациями",
+                                    "Не удалось загрузить доступные локации",
                                     "error"
                                 );
                             }
-                        } catch (error) {
-                            console.error(
-                                "Ошибка при загрузке соединений:",
-                                error
-                            );
-                            journalStore.addEntry(
-                                "Ошибка при загрузке соединений между локациями",
-                                "error"
+
+                            // Шаг 3: Загружаем соединения между локациями
+                            try {
+                                const connections =
+                                    await locationStore.loadLocationConnections();
+
+                                if (connections && connections.length > 0) {
+                                    setLocationConnections(connections);
+                                } else {
+                                    console.error(
+                                        "Не удалось загрузить соединения или список пуст!"
+                                    );
+                                    journalStore.addEntry(
+                                        "Не удалось загрузить данные о соединениях между локациями",
+                                        "error"
+                                    );
+                                }
+                            } catch (error) {
+                                console.error(
+                                    "Ошибка при загрузке соединений:",
+                                    error
+                                );
+                                journalStore.addEntry(
+                                    "Ошибка при загрузке соединений между локациями",
+                                    "error"
+                                );
+                            }
+                        } else {
+                            setError(
+                                "Не удалось загрузить информацию о локациях"
                             );
                         }
-
-                        // Устанавливаем тестовые данные, если локаций нет или нет требований
-                        if (
-                            locationStore.availableLocations.length === 0 ||
-                            !locationStore.availableLocations.some(
-                                (loc) =>
-                                    loc.requirements &&
-                                    loc.requirements.length > 0
-                            )
-                        ) {
-                            console.log(
-                                "Используем тестовые данные для локаций"
-                            );
-
-                            // Создаем тестовые данные для демонстрации работы интерфейса
-                            const demoLocations: Location[] = [
-                                {
-                                    id: 1,
-                                    name: "Лагерь выживших",
-                                    description:
-                                        "Защищенное место, где собираются те, кто смог пережить первые дни проклятия.",
-                                    image_url:
-                                        "/images/locations/novice-camp.jpg",
-                                    danger_level: 1,
-                                    is_default: true,
-                                    is_discoverable: true,
-                                    position_x: 0,
-                                    position_y: 0,
-                                    is_accessible: true,
-                                    is_current: true,
-                                    objects: [
-                                        {
-                                            id: "merchant",
-                                            name: "Торговец Малвер",
-                                            icon: "👨‍🦳",
-                                            type: "npc",
-                                            description:
-                                                "Загадочный торговец с редкими товарами и странной улыбкой.",
-                                        },
-                                        {
-                                            id: "quest-giver",
-                                            name: "Старейшина Ирмель",
-                                            icon: "👵",
-                                            type: "npc",
-                                            description:
-                                                "Хранительница знаний, которая дает задания отважным авантюристам.",
-                                        },
-                                    ],
-                                },
-                                {
-                                    id: 2,
-                                    name: "Леса Теней",
-                                    description:
-                                        "Древние леса, где деревья шепчут тайны прошлого и скрывают многочисленные опасности.",
-                                    image_url:
-                                        "/images/locations/shadow-woods.jpg",
-                                    danger_level: 3,
-                                    is_default: false,
-                                    is_discoverable: true,
-                                    position_x: 1,
-                                    position_y: 1,
-                                    is_accessible: true,
-                                    is_current: false,
-                                    objects: [
-                                        {
-                                            id: "wounded-wolf",
-                                            name: "Раненый теневой волк",
-                                            icon: "🐺",
-                                            type: "monster",
-                                            description:
-                                                "Опасное существо, ослабленное ранами. Хорошая добыча для новичка.",
-                                        },
-                                    ],
-                                },
-                                {
-                                    id: 3,
-                                    name: "Забытые руины",
-                                    description:
-                                        "Останки древней цивилизации, полные артефактов и смертельных ловушек.",
-                                    image_url:
-                                        "/images/locations/forgotten-ruins.jpg",
-                                    danger_level: 5,
-                                    is_default: false,
-                                    is_discoverable: true,
-                                    position_x: 2,
-                                    position_y: 0,
-                                    is_accessible: false,
-                                    is_current: false,
-                                    requirements: [
-                                        {
-                                            type: "level",
-                                            parameter: "",
-                                            value: 3,
-                                            description:
-                                                "Требуется минимум 3 уровень для входа в Забытые руины",
-                                            fulfilled: false,
-                                            current_value: 1,
-                                        },
-                                    ],
-                                },
-                                {
-                                    id: 4,
-                                    name: "Кровавые копи",
-                                    description:
-                                        "Заброшенные шахты, где добывали редкие кристаллы. Теперь там обитают существа из бездны.",
-                                    image_url:
-                                        "/images/locations/blood-mines.jpg",
-                                    danger_level: 7,
-                                    is_default: false,
-                                    is_discoverable: true,
-                                    position_x: 0,
-                                    position_y: 2,
-                                    is_accessible: false,
-                                    is_current: false,
-                                    requirements: [
-                                        {
-                                            type: "level",
-                                            parameter: "",
-                                            value: 5,
-                                            description:
-                                                "Требуется минимум 5 уровень для входа в Кровавые копи",
-                                            fulfilled: false,
-                                            current_value: 1,
-                                        },
-                                        {
-                                            type: "attribute",
-                                            parameter: "strength",
-                                            value: 6,
-                                            description:
-                                                "Требуется минимум 6 силы для открытия тяжелой двери в Кровавые копи",
-                                            fulfilled: false,
-                                            current_value: 5,
-                                        },
-                                    ],
-                                },
-                            ];
-
-                            // Устанавливаем демо-данные в хранилище
-                            runInAction(() => {
-                                locationStore.availableLocations =
-                                    demoLocations;
-                                locationStore.currentLocation =
-                                    demoLocations[0];
-                            });
-
-                            setActiveLocation(demoLocations[0]);
-                        }
-
-                        console.log(
-                            "Локации после обработки:",
-                            locationStore.availableLocations
-                        );
-                        console.log("Активная локация:", activeLocation);
-                    } else {
-                        setError("Не удалось загрузить информацию о локациях");
+                    } catch (err) {
+                        console.error("Ошибка при загрузке локаций:", err);
+                        setError("Ошибка при загрузке локаций");
                     }
-                } catch (err) {
-                    console.error("Ошибка при загрузке локаций:", err);
-                    setError("Ошибка при загрузке локаций");
                 }
-            }
 
-            setLoading(false);
+                setLoading(false);
+            } catch (err) {
+                console.error("Ошибка при загрузке игрового мира:", err);
+                setError("Ошибка при загрузке игрового мира");
+            }
         };
 
         loadGame();
@@ -712,12 +839,8 @@ const GameInterface: React.FC = observer(() => {
             return;
         }
 
-        // Добавим больше логирования
-        console.log(`Выбрана локация: ${location.name} (ID: ${location.id})`);
-
         // Если локация недоступна, покажем модальное окно с требованиями
         if (!location.is_accessible) {
-            console.log("Локация недоступна, показываем требования");
             setSelectedLocation(location);
             setIsRequirementsModalOpen(true);
             return;
@@ -725,21 +848,17 @@ const GameInterface: React.FC = observer(() => {
 
         // Если локация недоступна из текущей, покажем сообщение об ошибке
         if (!location.is_accessible_from_current) {
-            console.log("Локация недоступна из текущей локации");
             return;
         }
 
         // Поиск соединения между локациями
-        console.log("Поиск соединения между текущей локацией и целевой");
         const connections = locationConnections;
-        console.log("Доступные соединения:", connections);
 
         if (connections.length === 0) {
             console.warn("Массив соединений пуст! Загружаем соединения...");
             try {
                 const loadedConnections =
                     await locationStore.loadLocationConnections();
-                console.log("Загружены соединения:", loadedConnections);
                 if (loadedConnections.length > 0) {
                     setLocationConnections(loadedConnections);
                     // Продолжаем с новыми соединениями
@@ -755,20 +874,12 @@ const GameInterface: React.FC = observer(() => {
                     );
 
                     if (newConnection) {
-                        console.log(
-                            "Найдено соединение после загрузки:",
-                            newConnection
-                        );
                         // Получаем скорость персонажа
                         const characterSpeed =
                             characterStore.selectedCharacter.speed || 10;
-                        console.log(`Скорость персонажа: ${characterSpeed}`);
 
                         // Базовое время перемещения из соединения
                         let baseTravelTime = newConnection.travel_time;
-                        console.log(
-                            `Базовое время перемещения: ${baseTravelTime} секунд`
-                        );
 
                         // Расчет времени с учетом скорости персонажа
                         // Новая формула: max(3, time - time*(1 - speed/100))
@@ -777,16 +888,12 @@ const GameInterface: React.FC = observer(() => {
                             baseTravelTime -
                                 baseTravelTime * (1 - speedModifier)
                         );
-                        console.log(
-                            `Рассчитанное время с учетом скорости: ${calculatedTime} секунд`
-                        );
 
                         // Минимальное время перемещения - 3 секунды
                         const finalTravelTime = Math.max(3, calculatedTime);
 
                         // Расчет сэкономленного времени
                         const savedTime = baseTravelTime - finalTravelTime;
-                        console.log(`Сэкономленное время: ${savedTime} секунд`);
 
                         setIsLocationPreloaded(false);
                         setSelectedTargetLocation(location);
@@ -839,11 +946,9 @@ const GameInterface: React.FC = observer(() => {
 
         // Получаем скорость персонажа
         const characterSpeed = characterStore.selectedCharacter.speed || 10;
-        console.log(`Скорость персонажа: ${characterSpeed}`);
 
         // Базовое время перемещения из соединения или по умолчанию
         let baseTravelTime = connection ? connection.travel_time : 10;
-        console.log(`Базовое время перемещения: ${baseTravelTime} секунд`);
 
         // Расчет времени с учетом скорости персонажа
         // Новая формула: max(3, time - time*(1 - speed/100))
@@ -851,16 +956,12 @@ const GameInterface: React.FC = observer(() => {
         let calculatedTime = Math.round(
             baseTravelTime - baseTravelTime * speedModifier
         );
-        console.log(
-            `Рассчитанное время с учетом скорости: ${calculatedTime} секунд`
-        );
 
         // Минимальное время перемещения - 3 секунды
         const finalTravelTime = Math.max(3, calculatedTime);
 
         // Расчет сэкономленного времени
         const savedTime = baseTravelTime - finalTravelTime;
-        console.log(`Сэкономленное время: ${savedTime} секунд`);
 
         // Начинаем предзагрузку локации
         setIsLocationPreloaded(false);
@@ -871,13 +972,11 @@ const GameInterface: React.FC = observer(() => {
         setIsTravelModalOpen(true);
 
         // Предзагружаем данные локации
-        console.log("Начинаем предзагрузку данных локации");
         try {
             const response = await locationStore.getLocationDetails(
                 location.id,
                 characterStore.selectedCharacter.id
             );
-            console.log("Данные локации успешно предзагружены:", response);
             setIsLocationPreloaded(true);
         } catch (error) {
             console.error("Ошибка при предзагрузке данных локации:", error);
@@ -893,9 +992,6 @@ const GameInterface: React.FC = observer(() => {
 
         try {
             setLoading(true);
-            console.log(
-                `Завершение перемещения в локацию: ${selectedTargetLocation.name} (ID: ${selectedTargetLocation.id})`
-            );
 
             const result = await locationStore.moveToLocation(
                 characterStore.selectedCharacter.id,
@@ -903,10 +999,6 @@ const GameInterface: React.FC = observer(() => {
             );
 
             if (result.success) {
-                console.log(
-                    `Успешное перемещение в локацию: ${selectedTargetLocation.name}`
-                );
-
                 // Добавляем запись о перемещении в журнал
                 journalStore.addEntry(
                     `Вы прибыли в локацию ${selectedTargetLocation.name}`,
@@ -977,7 +1069,6 @@ const GameInterface: React.FC = observer(() => {
             }
         } else {
             journalStore.addEntry(`Вы исследуете ${object.name}`, "location");
-            console.log(`Взаимодействие с объектом: ${object.name}`);
             // Здесь будет логика для других типов объектов
         }
     };
@@ -1103,13 +1194,11 @@ const GameInterface: React.FC = observer(() => {
         items: string[];
     }) => {
         // Здесь будет логика для обновления персонажа с учетом полученной награды
-        console.log("Награды получены:", rewards);
     };
 
     // Обработчик поражения в бою
     const handleCombatDefeat = () => {
         // Здесь будет логика для обработки поражения персонажа
-        console.log("Персонаж потерпел поражение");
     };
 
     // Обработчик для показа требований локации
@@ -1417,15 +1506,16 @@ const GameInterface: React.FC = observer(() => {
                     {/* Фон локации */}
                     <div className="absolute inset-0 z-0">
                         <img
-                            src={
+                            src={getImageUrl(
                                 activeLocation?.image_url ||
-                                "/images/locations/fallback-location.jpg"
-                            }
+                                    "/images/locations/fallback_location.jpg"
+                            )}
                             alt={activeLocation?.name || "Локация"}
                             className="w-full h-full object-cover opacity-90"
                             onError={(e) => {
                                 (e.target as HTMLImageElement).src =
-                                    "/images/locations/fallback-location.jpg";
+                                    window.location.origin +
+                                    "/images/locations/fallback_location.jpg";
                             }}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/40 to-transparent"></div>
@@ -1679,6 +1769,24 @@ const GameInterface: React.FC = observer(() => {
                     onComplete={completeTravelToLocation}
                     onCancel={cancelTravel}
                     isLocationPreloaded={isLocationPreloaded}
+                />
+            )}
+
+            {/* Модальное окно для обучения новых игроков */}
+            {characterStore.selectedCharacter && (
+                <TutorialModal
+                    isOpen={showTutorial}
+                    onClose={() => {
+                        setShowTutorial(false);
+                        // После закрытия туториала обновляем информацию о персонаже
+                        if (characterStore.selectedCharacter) {
+                            characterStore.loadCharacter(
+                                characterStore.selectedCharacter.id
+                            );
+                        }
+                    }}
+                    characterName={characterStore.selectedCharacter.name}
+                    characterId={characterStore.selectedCharacter.id}
                 />
             )}
         </div>

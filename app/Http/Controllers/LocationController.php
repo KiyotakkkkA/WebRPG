@@ -70,20 +70,30 @@ class LocationController extends Controller
             \Log::debug("Добавлена текущая локация {$currentLocation->id} в список открытых");
         }
 
+        // Добавляем все соседние локации в список локаций для отображения
+        $connectedLocationIds = $allConnectedLocations->pluck('id')->toArray();
+        $allLocationIds = array_merge($discoveredLocations, $connectedLocationIds);
+        $allLocationIds = array_unique($allLocationIds);
+
+        \Log::debug("Все локации для отображения: " . implode(', ', $allLocationIds));
+
         // Получаем полную информацию обо всех локациях
         $locations = Location::with(['requirements', 'objects', 'resources', 'events'])
-            ->whereIn('id', $discoveredLocations)
+            ->whereIn('id', $allLocationIds)
             ->get();
 
         \Log::debug("Найдено локаций: " . $locations->count());
 
-        $locations = $locations->map(function ($location) use ($character, $currentLocation, $allConnectedLocations) {
+        $locations = $locations->map(function ($location) use ($character, $currentLocation, $allConnectedLocations, $discoveredLocations) {
             // Доступна ли локация для перехода из текущей
             $isAccessibleFromCurrent = $allConnectedLocations->contains('id', $location->id);
             \Log::debug("Локация {$location->id} ({$location->name}) доступна для перехода: " . ($isAccessibleFromCurrent ? 'да' : 'нет'));
 
             // Присваиваем значение полю is_accessible_from_current
             $location->is_accessible_from_current = $isAccessibleFromCurrent;
+
+            // Открыта ли локация (была ли посещена ранее)
+            $location->is_discovered = in_array($location->id, $discoveredLocations);
 
             // Текущая локация не должна быть доступна для перехода
             if ($location->id == $currentLocation->id) {
@@ -264,6 +274,13 @@ class LocationController extends Controller
 
         // Обновляем текущую локацию персонажа
         $character->current_location_id = $targetLocationId;
+
+        // Если персонаж новый, сбрасываем флаг is_new после первого перемещения
+        if ($character->is_new) {
+            $character->is_new = false;
+            \Log::info("Персонаж ID: {$characterId} начал свое приключение и больше не считается новым");
+        }
+
         $character->save();
 
         // Добавляем локацию в список открытых, если её там еще нет

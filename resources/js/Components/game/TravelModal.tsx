@@ -41,17 +41,12 @@ const TravelModal: React.FC<TravelModalProps> = ({
         if (isOpen) {
             setProgress(0);
             setRemainingTime(travelTime);
-            console.log(
-                `Окно путешествия открыто, время: ${travelTime}с (изначально было ${baseTravelTime}с, сэкономлено ${savedTime}с)`
-            );
         }
     }, [isOpen, travelTime, baseTravelTime, savedTime]);
 
     // Начать или остановить путешествие
     useEffect(() => {
         if (isOpen && !isCancelling) {
-            console.log("Запускаем анимацию путешествия...");
-
             // Фиксированные точки прогресса для гарантии заполнения
             const milestones = [5, 15, 30, 50, 70, 85, 95, 100];
             let currentMilestoneIndex = 0;
@@ -96,8 +91,6 @@ const TravelModal: React.FC<TravelModalProps> = ({
                             intervalRef.current = null;
                         }
 
-                        console.log("Путешествие завершено");
-
                         // Даем небольшую задержку перед завершением для плавности UI
                         setTimeout(() => {
                             if (!isCancelling) {
@@ -141,14 +134,12 @@ const TravelModal: React.FC<TravelModalProps> = ({
             if (intervalRef.current) {
                 clearInterval(intervalRef.current);
                 intervalRef.current = null;
-                console.log("Анимация путешествия остановлена");
             }
         };
     }, [isOpen, isCancelling, travelTime, onComplete]);
 
     // Обработка отмены путешествия
     const handleCancel = () => {
-        console.log("Путешествие отменено пользователем");
         setIsCancelling(true);
         if (intervalRef.current) {
             clearInterval(intervalRef.current);
@@ -164,11 +155,30 @@ const TravelModal: React.FC<TravelModalProps> = ({
         return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
     };
 
-    // Получаем фоновые изображения локаций
-    const fromImageUrl =
-        fromLocation.image_url || "/images/locations/fallback-location.jpg";
-    const toImageUrl =
-        toLocation.image_url || "/images/locations/fallback-location.jpg";
+    // Вспомогательная функция для формирования правильного URL изображения
+    const getImageUrl = (imagePath: string) => {
+        if (!imagePath)
+            return (
+                window.location.origin +
+                "/images/locations/fallback-location.jpg"
+            );
+
+        // Если путь уже начинается с http или https, оставляем как есть
+        if (
+            imagePath.startsWith("http://") ||
+            imagePath.startsWith("https://")
+        ) {
+            return imagePath;
+        }
+
+        // Если путь начинается с /, добавляем только origin
+        if (imagePath.startsWith("/")) {
+            return window.location.origin + imagePath;
+        }
+
+        // Иначе добавляем origin и /
+        return window.location.origin + "/" + imagePath;
+    };
 
     if (!isOpen) return null;
 
@@ -189,7 +199,9 @@ const TravelModal: React.FC<TravelModalProps> = ({
             <div
                 className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out"
                 style={{
-                    backgroundImage: `url(${toImageUrl})`,
+                    backgroundImage: `url(${getImageUrl(
+                        toLocation.image_url
+                    )})`,
                     opacity: safeProgress / 100,
                     filter: "brightness(0.3) blur(3px)",
                 }}
@@ -199,7 +211,9 @@ const TravelModal: React.FC<TravelModalProps> = ({
             <div
                 className="absolute inset-0 bg-cover bg-center transition-opacity duration-1000 ease-in-out"
                 style={{
-                    backgroundImage: `url(${fromImageUrl})`,
+                    backgroundImage: `url(${getImageUrl(
+                        fromLocation.image_url
+                    )})`,
                     opacity: 1 - safeProgress / 100,
                     filter: "brightness(0.3) blur(3px)",
                 }}
@@ -320,12 +334,46 @@ const TravelModal: React.FC<TravelModalProps> = ({
                     {safeProgress >= 90 && " Пункт назначения уже виден вдали."}
                 </p>
 
+                {/* Изображения локаций */}
+                <div className="flex mt-4 space-x-4">
+                    <div className="flex-1 relative">
+                        <div className="text-xs text-gray-400 mb-1 text-center">
+                            Откуда: {fromLocation.name}
+                        </div>
+                        <img
+                            src={getImageUrl(fromLocation.image_url)}
+                            alt={fromLocation.name}
+                            className="w-full h-24 object-cover rounded-md border border-gray-600 opacity-75"
+                            onError={(e) => {
+                                (e.target as HTMLImageElement).src =
+                                    window.location.origin +
+                                    "/images/locations/fallback-location.jpg";
+                            }}
+                        />
+                    </div>
+                    <div className="flex-1 relative">
+                        <div className="text-xs text-gray-400 mb-1 text-center">
+                            Куда: {toLocation.name}
+                        </div>
+                        <img
+                            src={getImageUrl(toLocation.image_url)}
+                            alt={toLocation.name}
+                            className="w-full h-24 object-cover rounded-md border border-gray-600"
+                            onError={(e) => {
+                                (e.target as HTMLImageElement).src =
+                                    window.location.origin +
+                                    "/images/locations/fallback-location.jpg";
+                            }}
+                        />
+                    </div>
+                </div>
+
                 {/* Кнопка отмены */}
                 <div className="flex justify-center">
                     <Button
                         variant="secondary"
                         onClick={handleCancel}
-                        className="px-6"
+                        className="px-6 mt-4"
                     >
                         Отменить путешествие
                     </Button>

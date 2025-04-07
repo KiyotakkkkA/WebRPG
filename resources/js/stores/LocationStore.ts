@@ -32,6 +32,7 @@ export interface Location {
     is_accessible: boolean;
     is_current: boolean;
     is_accessible_from_current?: boolean;
+    is_discovered?: boolean;
     requirements?: LocationRequirement[];
     objects?: LocationObject[];
     access_issue?: string;
@@ -73,6 +74,22 @@ class LocationStore {
                 params: { character_id: characterId },
             });
 
+            if (response.data.locations?.length > 0) {
+                const accessibleLocations = response.data.locations.filter(
+                    (loc: Location) =>
+                        loc.is_accessible_from_current && loc.is_accessible
+                );
+            }
+
+            // Проверяем структуру данных
+            if (!response.data || !response.data.locations) {
+                console.error(
+                    "Неверный формат данных в ответе API локаций",
+                    response.data
+                );
+                throw new Error("Неверный формат данных в ответе API");
+            }
+
             const locations = response.data.locations;
             const currentLocation = response.data.current_location;
 
@@ -86,6 +103,13 @@ class LocationStore {
                 currentLocation: currentLocation,
             };
         } catch (error: any) {
+            console.error("Ошибка при загрузке локаций:", error);
+            console.error("Детали ответа:", {
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+                data: error.response?.data,
+            });
+
             runInAction(() => {
                 this.error =
                     error.response?.data?.message ||
@@ -105,9 +129,7 @@ class LocationStore {
         this.error = null;
 
         try {
-            console.log("Отправка запроса на /api/locations/connections");
             const response = await axios.get("/api/locations/connections");
-            console.log("Ответ получен:", response.data);
 
             // Проверяем наличие данных
             if (
@@ -129,8 +151,6 @@ class LocationStore {
                 is_bidirectional: Boolean(conn.is_bidirectional),
                 travel_time: Number(conn.travel_time),
             }));
-
-            console.log("Преобразованные соединения:", connections);
 
             // Возвращаем соединения
             return connections;
@@ -208,10 +228,6 @@ class LocationStore {
                 };
             }
 
-            console.log(
-                `Попытка перемещения персонажа ${characterId} в локацию ${targetLocationId}`
-            );
-
             // Замер времени выполнения запроса
             const startTime = Date.now();
 
@@ -221,8 +237,6 @@ class LocationStore {
             });
 
             const requestTime = Date.now() - startTime;
-            console.log(`Время выполнения запроса: ${requestTime}мс`);
-            console.log("Ответ на запрос перемещения:", response.data);
 
             runInAction(() => {
                 // Проверяем, что в ответе есть ожидаемые данные
