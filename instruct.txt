@@ -1,0 +1,461 @@
+# РУКОВОДСТВО ПО СОЗДАНИЮ ВИЗУАЛЬНОЙ ТЕКСТОВОЙ РПГ
+# СТЕК: LARAVEL + REACT + TAILWIND CSS
+
+## СОДЕРЖАНИЕ
+1. Инициализация проекта
+2. Установка необходимых пакетов
+3. Структура проекта
+4. Рекомендации по разработке
+5. Промпты для генерации контента
+6. Полезные команды
+
+## 1. ИНИЦИАЛИЗАЦИЯ ПРОЕКТА
+
+### Установка Laravel
+```bash
+# Установка через composer
+composer create-project laravel/laravel rpg-game
+
+# Переход в директорию проекта
+cd rpg-game
+
+# Настройка .env файла (настроить подключение к БД)
+cp .env.example .env
+php artisan key:generate
+```
+
+### Установка React с Vite (Laravel 9+)
+```bash
+# Установка зависимостей для React
+composer require laravel/breeze --dev
+php artisan breeze:install react --typescript
+
+# Установка и настройка Inertia.js (опционально для SPA)
+composer require inertiajs/inertia-laravel
+php artisan inertia:middleware
+```
+
+### Альтернативный вариант для полного SPA с отдельным API
+```bash
+# Создание Laravel API
+composer create-project laravel/laravel rpg-game-api
+
+# Создание React фронтенда
+npx create-react-app rpg-game-frontend
+cd rpg-game-frontend
+npm install
+```
+
+## 2. УСТАНОВКА НЕОБХОДИМЫХ ПАКЕТОВ
+
+### Frontend (React) пакеты
+```bash
+# Основные пакеты
+npm install react-router-dom framer-motion @tanstack/react-query zustand styled-components
+npm install react-dnd react-dnd-html5-backend react-tooltip xstate immer
+
+# UI компоненты и стилизация
+npm install -D tailwindcss postcss autoprefixer daisyui @headlessui/react @tailwindcss/typography
+npm install @tailwindcss/forms
+
+# Для игровой графики
+npm install pixi.js phaser @sprite-sheet/core
+
+# Для интерактивного интерфейса
+npm install react-beautiful-dnd @tiptap/react @tiptap/starter-kit
+```
+
+### Backend (Laravel) пакеты
+```bash
+# Аутентификация и безопасность
+composer require laravel/sanctum
+php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider"
+
+# Система ролей и разрешений
+composer require spatie/laravel-permission
+php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"
+
+# Реалтайм обновления
+composer require pusher/pusher-php-server laravel/echo
+php artisan make:channel Game
+
+# Мониторинг и отладка
+composer require laravel/telescope --dev
+php artisan telescope:install
+composer require laravel/horizon
+php artisan horizon:install
+
+# Поисковая система
+composer require laravel/scout
+php artisan vendor:publish --provider="Laravel\Scout\ScoutServiceProvider"
+```
+
+### Настройка TailwindCSS
+```bash
+# Инициализация Tailwind
+npx tailwindcss init -p
+
+# Содержимое для tailwind.config.js
+module.exports = {
+  content: [
+    "./resources/**/*.{js,jsx,ts,tsx,blade.php}",
+    "./resources/js/**/*.{js,jsx,ts,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        // Средневековая цветовая схема
+        parchment: '#f4e9c9',
+        wood: '#8b4513',
+        leather: '#8b5a2b',
+        stone: '#a9a9a9',
+        gold: '#ffd700',
+      },
+      fontFamily: {
+        medieval: ['MedievalSharp', 'cursive'],
+        fantasy: ['Luminari', 'fantasy'],
+      },
+      backgroundImage: {
+        'scroll-pattern': "url('/img/scroll.png')",
+        'stone-texture': "url('/img/stone.png')",
+      },
+    },
+  },
+  plugins: [
+    require('@tailwindcss/typography'),
+    require('@tailwindcss/forms'),
+    require('daisyui'),
+  ],
+  daisyui: {
+    themes: [
+      {
+        medieval: {
+          primary: '#8b5a2b',
+          secondary: '#a9a9a9',
+          accent: '#ffd700',
+          neutral: '#f4e9c9',
+          'base-100': '#271c1a',
+        },
+      },
+    ],
+  },
+}
+```
+
+## 3. СТРУКТУРА ПРОЕКТА
+
+### Рекомендуемая структура Frontend
+```
+src/
+├── assets/
+│   ├── images/
+│   │   ├── backgrounds/
+│   │   │   ├── backgrounds/
+│   │   │   ├── characters/
+│   │   │   ├── items/
+│   │   │   └── ui/
+│   │   └── sounds/
+│   └── fonts/
+├── components/
+│   ├── ui/
+│   │   ├── Button.jsx
+│   │   ├── Dialog.jsx
+│   │   ├── Inventory.jsx
+│   │   └── Tooltip.jsx
+│   ├── game/
+│   │   ├── Character.jsx
+│   │   ├── Location.jsx
+│   │   ├── Quest.jsx
+│   │   └── Combat.jsx
+│   ├── layout/
+│   │   ├── GameLayout.jsx
+│   │   └── MenuLayout.jsx
+│   └── shared/
+├── hooks/
+│   ├── useGameState.js
+│   ├── useInventory.js
+│   └── useCombat.js
+├── pages/
+│   ├── MainMenu.jsx
+│   ├── Game.jsx
+│   ├── Character.jsx
+│   ├── Inventory.jsx
+│   └── Location.jsx
+├── store/
+│   ├── gameSlice.js
+│   ├── playerSlice.js
+│   └── store.js
+├── services/
+│   ├── api.js
+│   ├── gameService.js
+│   └── authService.js
+└── utils/
+    ├── helpers.js
+    └── constants.js
+```
+
+### Рекомендуемая структура Backend (Laravel)
+```
+app/
+├── Http/
+│   ├── Controllers/
+│   │   ├── Auth/
+│   │   ├── Game/
+│   │   │   ├── CharacterController.php
+│   │   │   ├── InventoryController.php
+│   │   │   ├── QuestController.php
+│   │   │   ├── CombatController.php
+│   │   │   └── LocationController.php
+│   │   └── Admin/
+│   ├── Middleware/
+│   └── Resources/
+├── Models/
+│   ├── User.php
+│   ├── Character.php
+│   ├── Item.php
+│   ├── Quest.php
+│   ├── Location.php
+│   └── Monster.php
+├── Services/
+│   ├── GameService.php
+│   ├── CombatService.php
+│   └── QuestService.php
+├── Events/
+│   ├── GameEvent.php
+│   └── CombatEvent.php
+└── Jobs/
+    └── ProcessGameTurn.php
+
+database/
+├── migrations/
+│   ├── create_characters_table.php
+│   ├── create_items_table.php
+│   ├── create_quests_table.php
+│   ├── create_locations_table.php
+│   └── create_monsters_table.php
+└── seeders/
+    ├── ItemSeeder.php
+    ├── LocationSeeder.php
+    └── MonsterSeeder.php
+```
+
+## 4. РЕКОМЕНДАЦИИ ПО РАЗРАБОТКЕ
+
+### Архитектурные принципы
+1. **Модульность** - разделите игру на независимые модули: персонажи, инвентарь, бои, диалоги
+2. **Состояние игры** - используйте Zustand/Redux для глобального состояния
+3. **API-First** - разработайте четкий API для всех игровых механик
+4. **Реактивность** - используйте WebSockets для обновлений в реальном времени
+5. **Кэширование** - активно используйте Redis для временных данных
+
+### Подход к разработке
+1. Начните с создания основных моделей данных и миграций
+2. Разработайте базовый UI с минимальной стилизацией
+3. Реализуйте ключевые игровые механики
+4. Постепенно добавляйте визуальные элементы и улучшения
+
+### Советы по производительности
+1. Используйте пагинацию для длинных списков
+2. Реализуйте ленивую загрузку компонентов
+3. Используйте кэширование запросов с React Query
+4. Оптимизируйте изображения перед загрузкой
+
+## 5. ПРОМПТЫ ДЛЯ ГЕНЕРАЦИИ КОНТЕНТА
+
+### Промпт для создания текстур и фонов
+```
+Создай средневековую текстуру [тип текстуры: камень/дерево/пергамент] для
+веб-игры в стиле старой браузерной игры. Разрешение 256x256, стиль должен быть
+стилизованный, не фотореалистичный. Текстура должна быть бесшовной (tileable).
+```
+
+### Промпт для иконок предметов
+```
+Нарисуй пиксельную иконку [название предмета: меч/щит/зелье] для игрового
+интерфейса в средневековом стиле. Размер 32x32, ограниченная цветовая палитра.
+Стиль напоминает старые браузерные RPG.
+```
+
+### Промпт для персонажей
+```
+Создай портрет [класс персонажа: воин/маг/лучник] для средневековой браузерной
+RPG. Стиль должен напоминать игры начала 2000-х, слегка карикатурный, но
+детализированный. Изображение должно быть фронтальным портретом на нейтральном фоне.
+```
+
+### Промпт для описания локаций
+```
+Напиши описание локации [название: таверна/лес/пещера] для текстовой RPG в
+средневековом фэнтези-сеттинге. Текст должен быть атмосферным, длиной 3-4
+предложения, включать визуальные детали и намеки на возможные действия игрока.
+```
+
+## 6. ПОЛЕЗНЫЕ КОМАНДЫ
+
+### Базы данных
+```bash
+# Миграции
+php artisan make:migration create_[table_name]_table
+php artisan migrate
+php artisan migrate:fresh --seed
+
+# Создание моделей с миграциями, фабриками и контроллерами
+php artisan make:model Character -mcrf
+```
+
+### Разработка
+```bash
+# Запуск Laravel
+php artisan serve
+
+# Запуск Vite для горячей перезагрузки
+npm run dev
+
+# Запуск очередей
+php artisan queue:work
+
+# Запуск WebSocket сервера (если используется)
+php artisan websockets:serve
+```
+
+### Deployment
+```bash
+# Сборка для продакшена
+npm run build
+
+# Оптимизация Laravel
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan optimize
+```
+
+### Docker (опционально)
+```bash
+# Запуск через Laravel Sail
+./vendor/bin/sail up -d
+./vendor/bin/sail composer require ...
+./vendor/bin/sail artisan migrate
+```
+
+## 7. ПРИМЕРЫ КОДА
+
+### Пример компонента React для локации
+```jsx
+import React from 'react';
+import { useGameState } from '../hooks/useGameState';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+
+const Location = () => {
+  const { currentLocation, availableLocations, moveToLocation } = useGameState();
+  const navigate = useNavigate();
+
+  const handleLocationClick = (locationId) => {
+    moveToLocation(locationId);
+    navigate(`/location/${locationId}`);
+  };
+
+  return (
+    <div className="bg-scroll-pattern p-6 rounded-lg max-w-4xl mx-auto">
+      <motion.h2
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="font-medieval text-2xl text-wood mb-4"
+      >
+        {currentLocation.name}
+      </motion.h2>
+
+      <p className="text-stone-700 mb-6">{currentLocation.description}</p>
+
+      <div className="bg-parchment p-4 rounded">
+        <h3 className="font-medieval text-xl text-wood mb-2">Куда хотите перейти?</h3>
+        <div className="grid grid-cols-2 gap-4">
+          {availableLocations.map((location) => (
+            <button
+              key={location.id}
+              onClick={() => handleLocationClick(location.id)}
+              className="bg-leather text-parchment p-2 rounded hover:bg-wood transition"
+            >
+              {location.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Location;
+```
+
+### Пример контроллера Laravel для локаций
+```php
+<?php
+
+namespace App\Http\Controllers\Game;
+
+use App\Http\Controllers\Controller;
+use App\Models\Location;
+use App\Models\Character;
+use Illuminate\Http\Request;
+
+class LocationController extends Controller
+{
+    public function show($id)
+    {
+        $location = Location::with(['npcs', 'quests', 'items'])->findOrFail($id);
+
+        // Проверка доступа к локации
+        $character = auth()->user()->character;
+        if (!$this->canAccessLocation($character, $location)) {
+            return response()->json(['error' => 'Эта локация недоступна'], 403);
+        }
+
+        // Обновление текущей локации персонажа
+        $character->current_location_id = $location->id;
+        $character->save();
+
+        // Получение доступных соседних локаций
+        $availableLocations = Location::where('is_accessible', true)
+            ->whereIn('id', $location->connected_locations)
+            ->get(['id', 'name', 'description', 'thumbnail']);
+
+        return response()->json([
+            'current_location' => $location,
+            'available_locations' => $availableLocations
+        ]);
+    }
+
+    private function canAccessLocation(Character $character, Location $location)
+    {
+        // Проверка минимального уровня
+        if ($character->level < $location->min_level) {
+            return false;
+        }
+
+        // Проверка на необходимые квесты
+        if (!empty($location->required_quests)) {
+            foreach ($location->required_quests as $questId) {
+                if (!$character->completedQuests->contains($questId)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+}
+```
+
+---
+
+## ССЫЛКИ НА ПОЛЕЗНЫЕ РЕСУРСЫ
+
+- Документация Laravel: https://laravel.com/docs
+- Документация React: https://reactjs.org/docs
+- Документация Tailwind CSS: https://tailwindcss.com/docs
+- Примеры UI компонентов: https://ui.shadcn.com/
+- Набор игровых ассетов: https://opengameart.org/
+- Инструменты для создания спрайтов: https://www.piskelapp.com/
+- Генераторы шрифтов: https://fontspace.com/category/medieval

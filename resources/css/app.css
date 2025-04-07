@@ -1,0 +1,266 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+/* Загрузка основного шрифта через импорт URL в CSS для поддержки Vite */
+@font-face {
+    font-family: "Anticva";
+    src: url("/fonts/Anticva.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: block;
+}
+
+/* Добавляем базовый стиль для страницы */
+html,
+body {
+    font-family: "Anticva", serif;
+    scroll-behavior: smooth;
+    font-size: 16px;
+}
+
+/* Дополнительные глобальные стили */
+.font-medieval {
+    font-family: "Anticva", serif;
+    letter-spacing: 0.05em;
+}
+
+/* Стили для заголовков игры */
+h1,
+.game-title {
+    font-family: "Anticva", serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 2.5rem;
+    line-height: 1.2;
+    color: rgb(220, 38, 38);
+}
+
+/* Стили для названия "Echoes of Oblivion" */
+.echoes-title {
+    font-family: "Anticva", serif;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: clamp(2rem, 5vw, 3rem);
+    line-height: 1.1;
+    color: rgb(220, 38, 38);
+}
+
+/* Предзагрузка шрифта */
+@layer base {
+    @font-face {
+        font-family: "Anticva";
+        src: url("/fonts/Anticva.ttf") format("truetype");
+        font-weight: normal;
+        font-style: normal;
+        font-display: block;
+    }
+}
+
+/* Исправление для исключения "прыжка" текста при загрузке шрифта */
+.font-size-stable {
+    font-size-adjust: 0.5;
+}
+
+@layer components {
+    /* Стили для большого заголовка игры */
+    h1,
+    .echoes-title {
+        @apply text-4xl md:text-5xl lg:text-6xl uppercase tracking-wider font-bold;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+
+    /* Стили для стандартных заголовков */
+    h2 {
+        @apply text-3xl md:text-4xl uppercase tracking-wide font-bold;
+        letter-spacing: 0.03em;
+    }
+
+    h3 {
+        @apply text-2xl md:text-3xl uppercase tracking-wide font-bold;
+        letter-spacing: 0.02em;
+    }
+
+    /* Стили для статистических данных */
+    .stats-value {
+        @apply text-2xl md:text-3xl font-bold;
+    }
+
+    .stats-label {
+        @apply uppercase tracking-widest text-sm;
+    }
+
+    .bg-pattern {
+        background-color: #1f2937;
+        background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23374151' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+
+    .paper-texture {
+        background-color: #f3f4f6;
+        background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%23e5e7eb' fill-opacity='0.1' fill-rule='evenodd'/%3E%3C/svg%3E");
+    }
+
+    /* Заголовок второго уровня в средневековом стиле */
+    .header-medieval {
+        @apply font-medieval text-red-500 text-2xl mb-6 text-center relative;
+    }
+
+    /* Градиент для текста */
+    .text-gradient {
+        @apply bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-yellow-500 inline-block;
+    }
+
+    /* Стилизация основной кнопки */
+    .btn-primary {
+        @apply bg-gradient-to-r from-red-800 to-red-900 px-4 py-2 rounded-md text-gray-200
+               hover:from-red-700 hover:to-red-800 transition-all shadow-md border border-red-900;
+    }
+
+    /* Стилизация заголовка секции */
+    .section-title {
+        @apply font-medieval text-red-500 uppercase tracking-widest text-sm;
+    }
+}
+
+/* Стилизация скроллбаров */
+/* Webkit (Chrome, Safari, Opera) */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(31, 41, 55, 0.7); /* gray-900 с прозрачностью */
+    border-radius: 4px;
+    margin: 2px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(
+        to bottom,
+        rgb(127, 29, 29),
+        rgb(185, 28, 28)
+    ); /* red-900 to red-700 */
+    border-radius: 4px;
+    border: 1px solid rgba(0, 0, 0, 0.3);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(
+        to bottom,
+        rgb(153, 27, 27),
+        rgb(220, 38, 38)
+    ); /* red-800 to red-600 */
+}
+
+::-webkit-scrollbar-corner {
+    background: rgba(31, 41, 55, 0.7);
+}
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(153, 27, 27) rgba(31, 41, 55, 0.7); /* red-800 и gray-900 */
+}
+
+/* Специальные стили для скроллбаров в панелях игры */
+.game-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.game-panel::-webkit-scrollbar-track {
+    background: rgba(31, 41, 55, 0.8); /* gray-800 с прозрачностью */
+    border-radius: 4px;
+}
+
+.game-panel::-webkit-scrollbar-thumb {
+    background: rgba(127, 29, 29, 0.8); /* red-900 с прозрачностью */
+    border-radius: 4px;
+    border: 1px solid rgba(220, 38, 38, 0.2); /* red-600 с прозрачностью */
+}
+
+.game-panel::-webkit-scrollbar-thumb:hover {
+    background: rgba(153, 27, 27, 0.9); /* red-800 с прозрачностью */
+}
+
+/* Стили для Firefox */
+.game-panel {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(127, 29, 29, 0.8) rgba(31, 41, 55, 0.8);
+}
+
+/* Анимации для главного меню */
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes widthExpand {
+    from {
+        width: 0;
+    }
+    to {
+        width: 75%;
+    }
+}
+
+.animate-fade-in-down {
+    animation: fadeInDown 1.2s ease forwards;
+}
+
+.animate-fade-in {
+    animation: fadeIn 1.5s ease forwards;
+    animation-delay: 0.3s;
+    opacity: 0;
+}
+
+.animate-fade-in-up {
+    animation: fadeInUp 1.2s ease forwards;
+    animation-delay: 0.6s;
+    opacity: 0;
+}
+
+.animate-width-expand {
+    animation: widthExpand 1.5s ease-out forwards;
+    animation-delay: 0.2s;
+    width: 0;
+}
+
+.animation-delay-300 {
+    animation-delay: 0.3s;
+}
+
+.animation-delay-700 {
+    animation-delay: 0.7s;
+}
+
+.animation-delay-1000 {
+    animation-delay: 1s;
+}

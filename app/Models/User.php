@@ -1,0 +1,76 @@
+<?php
+
+namespace App\Models;
+
+// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class User extends Authenticatable
+{
+    /** @use HasFactory<\Database\Factories\UserFactory> */
+    use HasFactory, Notifiable;
+
+    /**
+     * The attributes that are mass assignable.
+     *
+     * @var list<string>
+     */
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+        'max_characters',
+    ];
+
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var list<string>
+     */
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    /**
+     * Get the attributes that should be cast.
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+            'password' => 'hashed',
+            'max_characters' => 'integer',
+        ];
+    }
+
+    /**
+     * Получить всех персонажей, принадлежащих пользователю.
+     */
+    public function characters(): HasMany
+    {
+        return $this->hasMany(Character::class);
+    }
+
+    /**
+     * Проверить, достиг ли пользователь лимита персонажей
+     */
+    public function hasReachedCharacterLimit(): bool
+    {
+        return $this->characters()->count() >= $this->max_characters;
+    }
+
+    /**
+     * Получить количество оставшихся слотов для персонажей
+     */
+    public function getRemainingCharacterSlots(): int
+    {
+        $currentCount = $this->characters()->count();
+        return max(0, $this->max_characters - $currentCount);
+    }
+}
