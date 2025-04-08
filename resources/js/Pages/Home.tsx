@@ -330,31 +330,37 @@ const Home: React.FC = observer(() => {
                 {/* Секция персонажей для авторизованных пользователей */}
                 {authStore.isAuthenticated && (
                     <section className="py-12 bg-gray-900 border-b border-red-900/20 relative">
-                        <div className="absolute inset-0 bg-[url('/images/stone-texture.png')] bg-repeat opacity-5"></div>
+                        {/* Улучшенная фоновая текстура */}
+                        <div className="absolute inset-0 bg-[url('/images/stone_texture.jpg')] bg-repeat opacity-10"></div>
+                        <div className="absolute inset-0 bg-gradient-to-r from-gray-900/70 via-transparent to-gray-900/70"></div>
 
                         <div className="container mx-auto px-4 relative z-10">
                             <div className="flex justify-between items-center mb-8">
                                 <div className="flex items-center">
-                                    <div className="w-1 h-8 bg-red-700 mr-3"></div>
-                                    <h2 className="text-red-500">
-                                        Ваши персонажи
+                                    <div className="w-1 h-12 bg-gradient-to-b from-red-800 to-red-600 mr-3"></div>
+                                    <h2 className="text-red-500 text-2xl font-medieval tracking-wider">
+                                        ВАШИ ПЕРСОНАЖИ
                                     </h2>
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <div
-                                        className={`text-sm px-3 py-1 rounded-md ${
+                                        className={`text-sm px-4 py-2 rounded-md border ${
                                             charactersData?.remaining_slots ===
                                             0
-                                                ? "bg-red-900/40 text-red-300"
-                                                : "bg-gray-800/60 text-gray-300"
-                                        }`}
+                                                ? "border-red-900 bg-red-900/30 text-red-300"
+                                                : "border-gray-700 bg-gray-800/80 text-gray-300"
+                                        } shadow-inner`}
                                     >
-                                        Слоты:{" "}
-                                        <span className="font-bold">
+                                        СЛОТЫ:{" "}
+                                        <span className="font-bold text-red-400">
                                             {charactersData?.remaining_slots ||
                                                 0}
                                         </span>
-                                        /{charactersData?.max_characters || 3}
+                                        <span className="text-gray-500">/</span>
+                                        <span className="text-gray-400">
+                                            {charactersData?.max_characters ||
+                                                3}
+                                        </span>
                                     </div>
                                     <Button
                                         variant="primary"
@@ -363,8 +369,9 @@ const Home: React.FC = observer(() => {
                                         disabled={
                                             !charactersData?.can_create_more
                                         }
+                                        className="shadow-red-900/30 shadow-lg hover:shadow-red-900/50"
                                     >
-                                        <span className="mr-1">🧙</span> Создать
+                                        <span className="mr-2">🧙</span> Создать
                                         персонажа
                                     </Button>
                                 </div>
@@ -372,7 +379,7 @@ const Home: React.FC = observer(() => {
 
                             {/* Отображение ошибки при загрузке */}
                             {charactersError && (
-                                <div className="bg-red-900/20 text-red-400 p-4 mb-4 rounded-lg border border-red-900/40">
+                                <div className="bg-red-900/20 text-red-400 p-4 mb-4 rounded-lg border border-red-900/40 shadow-md">
                                     <div className="flex items-center">
                                         <svg
                                             xmlns="http://www.w3.org/2000/svg"
@@ -419,8 +426,8 @@ const Home: React.FC = observer(() => {
                                 </div>
                             ) : charactersData?.characters &&
                               charactersData.characters.length === 0 ? (
-                                <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-6 rounded-lg border border-red-900/30 shadow-lg text-center">
-                                    <p className="text-gray-400 mb-4">
+                                <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-8 rounded-lg border border-red-900/30 shadow-lg text-center">
+                                    <p className="text-gray-400 mb-4 font-medieval">
                                         У вас пока нет персонажей
                                     </p>
                                     <Button
@@ -429,6 +436,7 @@ const Home: React.FC = observer(() => {
                                         disabled={
                                             !charactersData.can_create_more
                                         }
+                                        className="shadow-red-900/30 shadow-lg"
                                     >
                                         <span className="mr-2">⚔️</span> Создать
                                         первого персонажа
@@ -440,33 +448,51 @@ const Home: React.FC = observer(() => {
                                         (character) => (
                                             <div
                                                 key={character.id}
-                                                className="bg-gradient-to-b from-gray-800 to-gray-900 rounded-lg border border-red-900/30 shadow-lg overflow-hidden hover:shadow-red-900/20 transition-all hover:-translate-y-1 cursor-pointer"
+                                                className="group bg-gradient-to-b from-gray-800 to-gray-900 rounded-lg border border-red-900/30 shadow-lg overflow-hidden hover:shadow-red-900/40 transition-all duration-300 hover:-translate-y-1 cursor-pointer relative"
                                                 onClick={() =>
                                                     navigate(
                                                         `/character/${character.id}`
                                                     )
                                                 }
                                             >
-                                                <div className="relative h-32">
-                                                    <img
-                                                        src={getClassImageSrc(
+                                                {/* Декоративные элементы в углах карточки */}
+                                                <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-red-800/50"></div>
+                                                <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-red-800/50"></div>
+                                                <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-red-800/50"></div>
+                                                <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-red-800/50"></div>
+
+                                                <div className="relative h-40 overflow-hidden">
+                                                    <div className="relative h-full w-full transform transition-transform duration-700 group-hover:scale-110">
+                                                        <img
+                                                            src={getClassImageSrc(
+                                                                character.class
+                                                            )}
+                                                            alt={getCharacterClass(
+                                                                character.class
+                                                            )}
+                                                            className="w-full h-full object-cover"
+                                                        />
+
+                                                        {/* Улучшенные градиенты */}
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/70 to-transparent"></div>
+                                                        <div className="absolute inset-0 bg-gradient-to-br from-red-900/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                                                    </div>
+
+                                                    {/* Индикатор класса */}
+                                                    <div className="absolute top-4 left-4 bg-gray-900/80 px-3 py-1 rounded text-xs text-red-400 border-l-2 border-red-700 shadow-lg z-10">
+                                                        {getCharacterClass(
                                                             character.class
                                                         )}
-                                                        alt={getCharacterClass(
-                                                            character.class
-                                                        )}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                    <div className="absolute inset-0 bg-gradient-to-t from-gray-900 to-transparent"></div>
+                                                    </div>
 
                                                     {character.is_active && (
                                                         <div
-                                                            className="absolute top-2 right-2 bg-green-600 w-6 h-6 rounded-full flex items-center justify-center"
+                                                            className="absolute top-4 right-4 bg-green-900/80 border border-green-700 px-2 py-1 rounded flex items-center space-x-1 shadow-lg z-10"
                                                             title="Активный персонаж"
                                                         >
                                                             <svg
                                                                 xmlns="http://www.w3.org/2000/svg"
-                                                                className="h-4 w-4 text-white"
+                                                                className="h-3 w-3 text-green-400"
                                                                 viewBox="0 0 20 20"
                                                                 fill="currentColor"
                                                             >
@@ -476,184 +502,181 @@ const Home: React.FC = observer(() => {
                                                                     clipRule="evenodd"
                                                                 />
                                                             </svg>
+                                                            <span className="text-xs text-green-400">
+                                                                Активен
+                                                            </span>
                                                         </div>
                                                     )}
-                                                </div>
 
-                                                <div className="p-4">
-                                                    <div className="flex justify-between items-center mb-2">
-                                                        <h3 className="text-lg text-red-500 font-medieval">
+                                                    {/* Имя персонажа на фоне */}
+                                                    <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
+                                                        <h3 className="text-xl text-white font-medieval tracking-wide drop-shadow-lg">
                                                             {character.name}
                                                         </h3>
-                                                        <div className="flex items-center">
-                                                            <span className="bg-red-900/30 text-gray-300 text-xs px-2 py-1 rounded">
-                                                                Ур.{" "}
+                                                        <div className="flex items-center space-x-2">
+                                                            <span className="bg-red-900/50 border border-red-800/50 text-gray-200 text-xs px-2 py-0.5 rounded">
+                                                                УР.{" "}
                                                                 {
                                                                     character.level
                                                                 }
                                                             </span>
                                                         </div>
                                                     </div>
+                                                </div>
 
-                                                    <p className="text-gray-400 text-sm mb-3">
-                                                        {getCharacterClass(
-                                                            character.class
-                                                        )}
-                                                    </p>
-
-                                                    <div className="grid grid-cols-2 gap-2 text-xs">
-                                                        <div className="flex items-center">
-                                                            <span className="text-gray-500 mr-1">
-                                                                Сила:
+                                                <div className="p-4">
+                                                    {/* Полосы характеристик */}
+                                                    <div className="space-y-2 mb-4">
+                                                        <div className="flex items-center justify-between text-xs">
+                                                            <span className="text-gray-400">
+                                                                HP
                                                             </span>
-                                                            <span className="text-red-400">
+                                                            <span className="text-gray-400">
+                                                                {
+                                                                    character.health
+                                                                }
+                                                                /
+                                                                {
+                                                                    character.max_health
+                                                                }
+                                                            </span>
+                                                        </div>
+                                                        <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                                                            <div
+                                                                className="h-full bg-gradient-to-r from-red-900 to-red-600 rounded-full"
+                                                                style={{
+                                                                    width: `${
+                                                                        (character.health /
+                                                                            character.max_health) *
+                                                                        100
+                                                                    }%`,
+                                                                }}
+                                                            ></div>
+                                                        </div>
+
+                                                        <div className="flex items-center justify-between text-xs">
+                                                            <span className="text-gray-400">
+                                                                MP
+                                                            </span>
+                                                            <span className="text-gray-400">
+                                                                {character.mana}
+                                                                /
+                                                                {
+                                                                    character.max_mana
+                                                                }
+                                                            </span>
+                                                        </div>
+                                                        <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                                                            <div
+                                                                className="h-full bg-gradient-to-r from-blue-900 to-blue-600 rounded-full"
+                                                                style={{
+                                                                    width: `${
+                                                                        (character.mana /
+                                                                            character.max_mana) *
+                                                                        100
+                                                                    }%`,
+                                                                }}
+                                                            ></div>
+                                                        </div>
+
+                                                        <div className="flex items-center justify-between text-xs">
+                                                            <span className="text-gray-400">
+                                                                SP
+                                                            </span>
+                                                            <span className="text-gray-400">
+                                                                {
+                                                                    character.stamina
+                                                                }
+                                                                /
+                                                                {
+                                                                    character.max_stamina
+                                                                }
+                                                            </span>
+                                                        </div>
+                                                        <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                                                            <div
+                                                                className="h-full bg-gradient-to-r from-green-900 to-green-600 rounded-full"
+                                                                style={{
+                                                                    width: `${
+                                                                        (character.stamina /
+                                                                            character.max_stamina) *
+                                                                        100
+                                                                    }%`,
+                                                                }}
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Характеристики в виде иконок */}
+                                                    <div className="grid grid-cols-4 gap-2 text-xs">
+                                                        <div className="bg-gray-800 rounded p-2 flex flex-col items-center">
+                                                            <span className="text-red-500 mb-1">
+                                                                💪
+                                                            </span>
+                                                            <span className="text-red-400 font-semibold">
                                                                 {
                                                                     character.strength
                                                                 }
                                                             </span>
-                                                        </div>
-                                                        <div className="flex items-center">
-                                                            <span className="text-gray-500 mr-1">
-                                                                Ловк:
+                                                            <span className="text-gray-500 text-[10px]">
+                                                                СИЛ
                                                             </span>
-                                                            <span className="text-red-400">
+                                                        </div>
+                                                        <div className="bg-gray-800 rounded p-2 flex flex-col items-center">
+                                                            <span className="text-red-500 mb-1">
+                                                                🏃
+                                                            </span>
+                                                            <span className="text-red-400 font-semibold">
                                                                 {
                                                                     character.agility
                                                                 }
                                                             </span>
-                                                        </div>
-                                                        <div className="flex items-center">
-                                                            <span className="text-gray-500 mr-1">
-                                                                Инт:
+                                                            <span className="text-gray-500 text-[10px]">
+                                                                ЛОВ
                                                             </span>
-                                                            <span className="text-red-400">
+                                                        </div>
+                                                        <div className="bg-gray-800 rounded p-2 flex flex-col items-center">
+                                                            <span className="text-red-500 mb-1">
+                                                                🧠
+                                                            </span>
+                                                            <span className="text-red-400 font-semibold">
                                                                 {
                                                                     character.intelligence
                                                                 }
                                                             </span>
-                                                        </div>
-                                                        <div className="flex items-center">
-                                                            <span className="text-gray-500 mr-1">
-                                                                Жив:
+                                                            <span className="text-gray-500 text-[10px]">
+                                                                ИНТ
                                                             </span>
-                                                            <span className="text-red-400">
+                                                        </div>
+                                                        <div className="bg-gray-800 rounded p-2 flex flex-col items-center">
+                                                            <span className="text-red-500 mb-1">
+                                                                ❤️
+                                                            </span>
+                                                            <span className="text-red-400 font-semibold">
                                                                 {
                                                                     character.vitality
                                                                 }
                                                             </span>
+                                                            <span className="text-gray-500 text-[10px]">
+                                                                ЖИВ
+                                                            </span>
                                                         </div>
                                                     </div>
 
-                                                    <div className="mt-3 pt-3 border-t border-gray-700 flex justify-between items-center">
-                                                        <div>
-                                                            <div className="flex items-center mb-1">
-                                                                <span className="text-gray-500 text-xs mr-1">
-                                                                    HP:
-                                                                </span>
-                                                                <div className="w-24 bg-gray-700 rounded-full h-1.5">
-                                                                    <div
-                                                                        className="bg-red-600 h-1.5 rounded-full"
-                                                                        style={{
-                                                                            width: `${
-                                                                                (character.health /
-                                                                                    character.max_health) *
-                                                                                100
-                                                                            }%`,
-                                                                        }}
-                                                                    ></div>
-                                                                </div>
-                                                                <span className="text-gray-500 text-xs ml-1">
-                                                                    {
-                                                                        character.health
-                                                                    }
-                                                                    /
-                                                                    {
-                                                                        character.max_health
-                                                                    }
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center mb-1">
-                                                                <span className="text-gray-500 text-xs mr-1">
-                                                                    MP:
-                                                                </span>
-                                                                <div className="w-24 bg-gray-700 rounded-full h-1.5">
-                                                                    <div
-                                                                        className="bg-blue-600 h-1.5 rounded-full"
-                                                                        style={{
-                                                                            width: `${
-                                                                                (character.mana /
-                                                                                    character.max_mana) *
-                                                                                100
-                                                                            }%`,
-                                                                        }}
-                                                                    ></div>
-                                                                </div>
-                                                                <span className="text-gray-500 text-xs ml-1">
-                                                                    {
-                                                                        character.mana
-                                                                    }
-                                                                    /
-                                                                    {
-                                                                        character.max_mana
-                                                                    }
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center mb-1">
-                                                                <span className="text-gray-500 text-xs mr-1">
-                                                                    SP:
-                                                                </span>
-                                                                <div className="w-24 bg-gray-700 rounded-full h-1.5">
-                                                                    <div
-                                                                        className="bg-green-600 h-1.5 rounded-full"
-                                                                        style={{
-                                                                            width: `${
-                                                                                (character.stamina /
-                                                                                    character.max_stamina) *
-                                                                                100
-                                                                            }%`,
-                                                                        }}
-                                                                    ></div>
-                                                                </div>
-                                                                <span className="text-gray-500 text-xs ml-1">
-                                                                    {
-                                                                        character.stamina
-                                                                    }
-                                                                    /
-                                                                    {
-                                                                        character.max_stamina
-                                                                    }
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex items-center">
-                                                                <span className="text-gray-500 text-xs mr-1">
-                                                                    XP:
-                                                                </span>
-                                                                <div className="w-24 bg-gray-700 rounded-full h-1.5">
-                                                                    <div
-                                                                        className="bg-yellow-600 h-1.5 rounded-full"
-                                                                        style={{
-                                                                            width: `${
-                                                                                (character.experience /
-                                                                                    character.exp_to_next_level) *
-                                                                                100
-                                                                            }%`,
-                                                                        }}
-                                                                    ></div>
-                                                                </div>
-                                                                <span className="text-gray-500 text-xs ml-1">
-                                                                    {
-                                                                        character.experience
-                                                                    }
-                                                                    /
-                                                                    {
-                                                                        character.exp_to_next_level
-                                                                    }
-                                                                </span>
-                                                            </div>
+                                                    <div className="mt-4 pt-3 border-t border-gray-700 flex justify-between items-center">
+                                                        <div className="text-xs text-gray-500">
+                                                            XP:{" "}
+                                                            {
+                                                                character.experience
+                                                            }
+                                                            /
+                                                            {
+                                                                character.exp_to_next_level
+                                                            }
                                                         </div>
                                                         <Button
                                                             variant="secondary"
-                                                            className="text-xs px-2 py-1"
+                                                            className="text-xs px-3 py-1.5 border border-red-900/50 hover:bg-red-900/30"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 navigate(
@@ -661,7 +684,7 @@ const Home: React.FC = observer(() => {
                                                                 );
                                                             }}
                                                         >
-                                                            Играть
+                                                            ИГРАТЬ
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -677,7 +700,8 @@ const Home: React.FC = observer(() => {
                 {/* Статистика игры - показываем ошибку если есть */}
                 <section className="py-8 bg-gray-900 border-y border-red-900/20 relative">
                     {/* Фоновая текстура */}
-                    <div className="absolute inset-0 bg-[url('/images/stone-texture.png')] bg-repeat opacity-5"></div>
+                    <div className="absolute inset-0 bg-[url('/images/stone_texture.jpg')] bg-repeat opacity-5"></div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-gray-900/70 via-transparent to-gray-900/70"></div>
 
                     <div className="container mx-auto px-4 relative z-10">
                         {statisticsError && (
@@ -712,25 +736,54 @@ const Home: React.FC = observer(() => {
                             </div>
                         )}
 
-                        <div className="grid grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {statistics.map((stat, index) => (
                                 <div
                                     key={index}
-                                    className="text-center transform hover:scale-105 transition-transform"
+                                    className="transform hover:scale-105 transition-transform duration-300"
                                 >
-                                    <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-4 rounded-md border border-red-900/20 shadow-lg">
-                                        <div className="text-3xl mb-1">
-                                            {stat.icon}
+                                    <div className="bg-gradient-to-b from-gray-800 to-gray-900 p-6 rounded-lg border border-red-900/20 shadow-xl relative overflow-hidden group">
+                                        {/* Декоративные элементы для каждой карточки статистики */}
+                                        <div className="absolute top-0 right-0 w-20 h-20 bg-red-900/10 rounded-bl-full"></div>
+                                        <div className="absolute inset-0 bg-[url('/images/scroll-texture.png')] bg-repeat opacity-5"></div>
+
+                                        {/* Гексагональные углы */}
+                                        <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-red-800/50"></div>
+                                        <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-red-800/50"></div>
+                                        <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-red-800/50"></div>
+                                        <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-red-800/50"></div>
+
+                                        <div className="flex items-center justify-center mb-2">
+                                            <div className="w-12 h-12 flex items-center justify-center bg-red-900/20 rounded-full border border-red-900/30 shadow-inner mb-3 group-hover:bg-red-900/30 transition-colors duration-300">
+                                                <span className="text-2xl">
+                                                    {stat.icon}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <p className="stats-value text-red-600">
-                                            {statisticsLoading
-                                                ? "..."
-                                                : stat.value}
-                                        </p>
-                                        <div className="h-0.5 w-1/2 mx-auto bg-gradient-to-r from-transparent via-red-700/30 to-transparent my-2"></div>
-                                        <p className="stats-label text-gray-400">
-                                            {stat.label}
-                                        </p>
+
+                                        <div className="text-center relative">
+                                            <p className="stats-value text-red-500 text-3xl font-medieval tracking-wider mb-1 relative">
+                                                {statisticsLoading ? (
+                                                    <span className="inline-block w-12 h-6 bg-red-900/30 animate-pulse rounded"></span>
+                                                ) : (
+                                                    <span className="relative">
+                                                        <span className="absolute -left-1 -top-1 text-red-900/30 blur-sm">
+                                                            {stat.value}
+                                                        </span>
+                                                        {stat.value}
+                                                    </span>
+                                                )}
+                                            </p>
+
+                                            <div className="h-0.5 w-1/2 mx-auto bg-gradient-to-r from-transparent via-red-700/50 to-transparent my-2"></div>
+
+                                            <p className="stats-label text-gray-400 uppercase tracking-wide text-sm font-medieval">
+                                                {stat.label}
+                                            </p>
+                                        </div>
+
+                                        {/* Декоративный эффект при наведении */}
+                                        <div className="absolute inset-0 bg-gradient-to-tr from-red-900/0 to-red-900/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                                     </div>
                                 </div>
                             ))}

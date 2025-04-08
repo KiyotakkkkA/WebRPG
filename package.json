@@ -28,6 +28,7 @@
     "dependencies": {
         "@pixi/spritesheet": "^7.4.3",
         "@tanstack/react-query": "^5.71.10",
+        "framer-motion": "^12.6.3",
         "mobx": "^6.13.7",
         "mobx-react-lite": "^4.1.0",
         "phaser": "^3.88.2",

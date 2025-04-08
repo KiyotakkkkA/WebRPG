@@ -1017,9 +1017,6 @@ const AdminLocationRequirements: React.FC = observer(() => {
         <AdminLayout pageTitle="Требования для локаций">
             <div className="mb-6">
                 <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-medieval text-red-400">
-                        Управление требованиями локаций
-                    </h2>
                     <div className="flex space-x-2">
                         {selectedLocationId && (
                             <Link

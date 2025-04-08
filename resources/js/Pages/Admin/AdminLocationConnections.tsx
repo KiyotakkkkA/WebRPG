@@ -530,9 +530,6 @@ const AdminLocationConnections: React.FC = observer(() => {
     return (
         <AdminLayout pageTitle="Соединения между локациями">
             <div className="mb-6 flex justify-between items-center">
-                <h2 className="text-xl font-medieval text-red-400">
-                    Управление соединениями между локациями
-                </h2>
                 <button
                     onClick={handleAddConnection}
                     className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-md flex items-center"
