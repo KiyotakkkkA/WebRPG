@@ -6,6 +6,7 @@ interface User {
     name: string;
     email: string;
     role: string;
+    is_root?: boolean;
 }
 
 class AuthStore {
@@ -45,6 +46,21 @@ class AuthStore {
     // Проверка, является ли пользователь администратором
     get isAdmin(): boolean {
         return this.user?.role === "admin";
+    }
+
+    // Проверка, является ли пользователь главным администратором
+    get isRootAdmin(): boolean {
+        return this.user?.role === "admin" && this.user?.is_root === true;
+    }
+
+    // Проверка, является ли пользователь сотрудником поддержки
+    get isSupport(): boolean {
+        return this.user?.role === "support";
+    }
+
+    // Проверка, имеет ли пользователь права для доступа к системе поддержки
+    get isSupportOrAdmin(): boolean {
+        return this.isAdmin || this.isSupport;
     }
 
     // Вход в систему

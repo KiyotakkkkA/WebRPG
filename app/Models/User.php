@@ -24,6 +24,7 @@ class User extends Authenticatable
         'password',
         'max_characters',
         'role',
+        'is_root',
     ];
 
     /**
@@ -76,11 +77,35 @@ class User extends Authenticatable
     }
 
     /**
+     * Проверить, является ли пользователь главным администратором
+     */
+    public function isRootAdmin(): bool
+    {
+        return $this->role === 'admin' && $this->is_root === true;
+    }
+
+    /**
      * Проверить, является ли пользователь администратором
      */
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    /**
+     * Проверить, является ли пользователь сотрудником поддержки
+     */
+    public function isSupport(): bool
+    {
+        return $this->role === 'support';
+    }
+
+    /**
+     * Проверить, является ли пользователь администратором или сотрудником поддержки
+     */
+    public function isSupportOrAdmin(): bool
+    {
+        return $this->isAdmin() || $this->isSupport();
     }
 
     /**

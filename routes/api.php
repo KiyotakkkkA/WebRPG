@@ -7,6 +7,7 @@ use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Admin\AdminLocationController;
+use App\Http\Controllers\SupportMessageController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -43,12 +44,33 @@ Route::middleware(['web', 'auth:sanctum'])->group(function () {
     Route::get('/locations/connections', [LocationController::class, 'getLocationConnections']);
     Route::get('/locations/{location}', [LocationController::class, 'getLocation']);
     Route::post('/locations/move', [LocationController::class, 'moveToLocation']);
+
+    // Маршруты для службы поддержки
+    Route::post('/support-messages', [SupportMessageController::class, 'store']);
+    Route::get('/my-support-messages', [SupportMessageController::class, 'getUserMessages']);
+    Route::post('/support-messages/{id}/rate', [SupportMessageController::class, 'rate']);
+});
+
+// Маршруты для авторизованных сотрудников поддержки и администраторов
+Route::middleware(['web', 'auth:sanctum', 'role:admin,support'])->group(function () {
+    Route::get('/support-messages', [SupportMessageController::class, 'index']);
+    Route::get('/support-messages/{id}', [SupportMessageController::class, 'show']);
+    Route::put('/support-messages/{id}', [SupportMessageController::class, 'update']);
+    Route::get('/support-messages-statistics', [SupportMessageController::class, 'getStatistics']);
+
+    // Маршруты для взятия и освобождения сообщений от модерации
+    Route::put('/support-messages/{id}/take-for-moderation', [SupportMessageController::class, 'takeForModeration']);
+    Route::put('/support-messages/{id}/release-from-moderation', [SupportMessageController::class, 'releaseFromModeration']);
 });
 
 // Маршруты для админ-панели (требуют роли admin)
-Route::middleware(['web', 'auth:sanctum', 'role:role:admin'])->prefix('admin')->group(function () {
+Route::middleware(['web', 'auth:sanctum', 'role:admin'])->prefix('admin')->group(function () {
     // Получение информации для дэшборда админа
     Route::get('/dashboard', [AdminController::class, 'dashboard']);
+
+    // Управление пользователями (только для root-администраторов - проверка происходит в контроллере)
+    Route::get('/users', [AdminController::class, 'getAllUsers']);
+    Route::put('/users/{userId}/role', [AdminController::class, 'updateUserRole']);
 
     // Управление локациями
     Route::get('/locations', [AdminLocationController::class, 'index']);

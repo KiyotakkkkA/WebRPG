@@ -4,34 +4,49 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Facades\Auth;
 
 class CheckRole
 {
     /**
-     * Обработка входящего запроса.
+     * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  \Illuminate\Http\Request  $request
+     * @param  \Closure  $next
+     * @param  string  ...$roles
+     * @return mixed
      */
-    public function handle(Request $request, Closure $next, string $role = null): Response
+    public function handle(Request $request, Closure $next, ...$roles)
     {
-        if (!$request->user()) {
-            return response()->json(['message' => 'Необходима аутентификация'], 401);
+        // Проверяем, авторизован ли пользователь
+        if (!Auth::check()) {
+            return response()->json(['message' => 'Неавторизованный доступ'], 401);
         }
 
-        // Проверка роли, если она указана в формате "role:{role_name}"
-        if ($role) {
-            $parts = explode(':', $role);
+        // Получаем текущего пользователя
+        $user = Auth::user();
 
-            if (count($parts) === 2 && $parts[0] === 'role') {
-                $roleName = $parts[1];
-
-                if (!$request->user()->hasRole($roleName)) {
-                    return response()->json(['message' => 'Недостаточно прав для выполнения действия'], 403);
-                }
+        // Преобразуем аргументы в массив ролей
+        // Поддержка как role:admin,support, так и role:admin|support
+        $allowedRoles = [];
+        foreach ($roles as $role) {
+            if (str_contains($role, ',')) {
+                $allowedRoles = array_merge($allowedRoles, explode(',', $role));
+            } elseif (str_contains($role, '|')) {
+                $allowedRoles = array_merge($allowedRoles, explode('|', $role));
+            } else {
+                $allowedRoles[] = $role;
             }
         }
 
-        return $next($request);
+        // Проверяем, имеет ли пользователь одну из разрешенных ролей
+        foreach ($allowedRoles as $role) {
+            if ($user->role === $role) {
+                return $next($request);
+            }
+        }
+
+        // Если у пользователя нет разрешенной роли, возвращаем ошибку доступа
+        return response()->json(['message' => 'Доступ запрещен'], 403);
     }
 }

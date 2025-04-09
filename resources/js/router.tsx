@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import PublicRoute from "./Routes/PublicRoute";
 import PrivateRoute from "./Routes/PrivateRoute";
 import AdminRoute from "./Routes/AdminRoute";
+import SupportRoute from "./Routes/SupportRoute";
 import Home from "./Pages/Home";
 import Login from "./Pages/Auth/Login";
 import Register from "./Pages/Auth/Register";
@@ -13,6 +14,12 @@ import AdminDashboard from "./Pages/Admin/AdminDashboard";
 import AdminLocations from "./Pages/Admin/AdminLocations";
 import AdminLocationConnections from "./Pages/Admin/AdminLocationConnections";
 import AdminLocationRequirements from "./Pages/Admin/AdminLocationRequirements";
+import TermsOfService from "./Pages/TermsOfService";
+import Support from "./Pages/Support";
+import SupportMessages from "./Pages/SupportAdmin/SupportMessages";
+import Help from "./Pages/Help/Help";
+import Profile from "./Pages/Profile/Profile";
+import MyMessages from "./Pages/Profile/MyMessages";
 
 const MRouter: React.FC = () => {
     return (
@@ -43,6 +50,46 @@ const MRouter: React.FC = () => {
                     }
                 />
                 <Route
+                    path="/terms"
+                    element={
+                        <PublicRoute>
+                            <TermsOfService />
+                        </PublicRoute>
+                    }
+                />
+                <Route
+                    path="/support"
+                    element={
+                        <PublicRoute>
+                            <Support />
+                        </PublicRoute>
+                    }
+                />
+                <Route
+                    path="/help"
+                    element={
+                        <PublicRoute>
+                            <Help />
+                        </PublicRoute>
+                    }
+                />
+                <Route
+                    path="/profile"
+                    element={
+                        <PrivateRoute>
+                            <Profile />
+                        </PrivateRoute>
+                    }
+                />
+                <Route
+                    path="/profile/messages"
+                    element={
+                        <PrivateRoute>
+                            <MyMessages />
+                        </PrivateRoute>
+                    }
+                />
+                <Route
                     path="/character/create"
                     element={
                         <PrivateRoute>
@@ -64,6 +111,16 @@ const MRouter: React.FC = () => {
                         <PrivateRoute>
                             <GameInterface />
                         </PrivateRoute>
+                    }
+                />
+
+                {/* Маршруты для системы поддержки */}
+                <Route
+                    path="/support-admin"
+                    element={
+                        <SupportRoute>
+                            <SupportMessages />
+                        </SupportRoute>
                     }
                 />
 

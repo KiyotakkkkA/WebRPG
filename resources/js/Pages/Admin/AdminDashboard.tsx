@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import AdminLayout from "./AdminLayout";
 import axios from "../../config/axios";
+import authStore from "../../stores/AuthStore";
+import { observer } from "mobx-react-lite";
 
 interface Statistics {
     total_users: number;
@@ -14,6 +16,7 @@ interface RecentUser {
     name: string;
     email: string;
     role: string;
+    is_root?: boolean;
     created_at: string;
 }
 
@@ -31,6 +34,12 @@ interface DashboardData {
     popular_locations: PopularLocation[];
 }
 
+// Типы для табов
+type TabType = "users" | "locations";
+
+// Доступные роли пользователей
+type UserRole = "user" | "admin" | "support";
+
 const StatCard: React.FC<{
     title: string;
     value: number | string;
@@ -45,12 +54,100 @@ const StatCard: React.FC<{
     </div>
 );
 
-const AdminDashboard: React.FC = () => {
+// Компонент таба
+const TabButton: React.FC<{
+    active: boolean;
+    onClick: () => void;
+    children: React.ReactNode;
+}> = ({ active, onClick, children }) => (
+    <button
+        onClick={onClick}
+        className={`py-3 px-6 font-medieval text-lg transition-colors ${
+            active
+                ? "text-red-400 border-b-2 border-red-500"
+                : "text-gray-400 hover:text-red-300"
+        }`}
+    >
+        {children}
+    </button>
+);
+
+const RoleSelector: React.FC<{
+    userId: number;
+    currentRole: string;
+    onRoleChanged: (success: boolean) => void;
+}> = ({ userId, currentRole, onRoleChanged }) => {
+    const [selectedRole, setSelectedRole] = useState<UserRole>(
+        currentRole as UserRole
+    );
+    const [isUpdating, setIsUpdating] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const updateUserRole = async () => {
+        // Если роль не изменилась, ничего не делаем
+        if (selectedRole === currentRole) {
+            return;
+        }
+
+        try {
+            setIsUpdating(true);
+            setError(null);
+
+            await axios.put(`/api/admin/users/${userId}/role`, {
+                role: selectedRole,
+            });
+
+            onRoleChanged(true);
+        } catch (err: any) {
+            setError(
+                err.response?.data?.message || "Ошибка при обновлении роли"
+            );
+            onRoleChanged(false);
+        } finally {
+            setIsUpdating(false);
+        }
+    };
+
+    return (
+        <div className="flex items-center space-x-2">
+            <select
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value as UserRole)}
+                className="bg-gray-700 text-gray-300 text-sm rounded-md border border-red-900/30 px-2 py-1"
+                disabled={isUpdating}
+            >
+                <option value="user">Пользователь</option>
+                <option value="support">Сотрудник поддержки</option>
+                <option value="admin">Администратор</option>
+            </select>
+
+            {selectedRole !== currentRole && (
+                <button
+                    onClick={updateUserRole}
+                    disabled={isUpdating}
+                    className="bg-red-900/40 hover:bg-red-900/60 text-white text-xs px-2 py-1 rounded-md transition-colors"
+                >
+                    {isUpdating ? "..." : "Сохранить"}
+                </button>
+            )}
+
+            {error && <div className="text-red-500 text-xs">{error}</div>}
+        </div>
+    );
+};
+
+const AdminDashboard: React.FC = observer(() => {
     const [dashboardData, setDashboardData] = useState<DashboardData | null>(
         null
     );
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<TabType>("users");
+    const [allUsers, setAllUsers] = useState<RecentUser[]>([]);
+    const [usersLoading, setUsersLoading] = useState<boolean>(false);
+
+    // Проверка, является ли текущий пользователь главным администратором
+    const isRootAdmin = authStore.isRootAdmin;
 
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -72,6 +169,40 @@ const AdminDashboard: React.FC = () => {
 
         fetchDashboardData();
     }, []);
+
+    // Загружаем всех пользователей, если админ является root и пользователь переключился на вкладку "Пользователи"
+    useEffect(() => {
+        const fetchAllUsers = async () => {
+            if (activeTab === "users" && isRootAdmin && allUsers.length === 0) {
+                try {
+                    setUsersLoading(true);
+                    const response = await axios.get("/api/admin/users");
+                    setAllUsers(response.data.users);
+                } catch (err) {
+                    console.error("Ошибка загрузки пользователей:", err);
+                } finally {
+                    setUsersLoading(false);
+                }
+            }
+        };
+
+        fetchAllUsers();
+    }, [activeTab, isRootAdmin, allUsers.length]);
+
+    // Функция обновления списка пользователей после изменения роли
+    const handleRoleChange = async (success: boolean) => {
+        if (success && isRootAdmin) {
+            try {
+                setUsersLoading(true);
+                const response = await axios.get("/api/admin/users");
+                setAllUsers(response.data.users);
+            } catch (err) {
+                console.error("Ошибка загрузки пользователей:", err);
+            } finally {
+                setUsersLoading(false);
+            }
+        }
+    };
 
     if (isLoading) {
         return (
@@ -97,6 +228,12 @@ const AdminDashboard: React.FC = () => {
             </AdminLayout>
         );
     }
+
+    // Определяем, какие данные пользователей показывать: для root-админа - всех, для обычного - только последних
+    const usersToShow =
+        isRootAdmin && allUsers.length > 0
+            ? allUsers
+            : dashboardData?.recent_users || [];
 
     return (
         <AdminLayout pageTitle="Панель управления">
@@ -199,78 +336,130 @@ const AdminDashboard: React.FC = () => {
                         />
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Последние зарегистрированные пользователи */}
-                        <div className="bg-gray-800 rounded-lg border border-red-900/30 shadow-md">
-                            <div className="p-4 border-b border-red-900/30">
-                                <h2 className="text-xl font-medieval text-red-400">
-                                    Новые пользователи
-                                </h2>
-                            </div>
-                            <div className="p-4">
-                                <table className="min-w-full divide-y divide-gray-700">
-                                    <thead>
-                                        <tr>
-                                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
-                                                Имя
-                                            </th>
-                                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
-                                                Email
-                                            </th>
-                                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
-                                                Роль
-                                            </th>
-                                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
-                                                Дата регистрации
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-700">
-                                        {dashboardData?.recent_users?.map(
-                                            (user) => (
-                                                <tr key={user.id}>
-                                                    <td className="px-4 py-3 text-gray-300">
-                                                        {user.name}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-gray-300">
-                                                        {user.email}
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <span
-                                                            className={`px-2 py-1 rounded-full text-xs ${
-                                                                user.role ===
-                                                                "admin"
-                                                                    ? "bg-red-900/30 text-red-300"
-                                                                    : "bg-gray-700 text-gray-300"
-                                                            }`}
-                                                        >
-                                                            {user.role ===
-                                                            "admin"
-                                                                ? "Администратор"
-                                                                : "Пользователь"}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-gray-300">
-                                                        {new Date(
-                                                            user.created_at
-                                                        ).toLocaleDateString()}
-                                                    </td>
-                                                </tr>
-                                            )
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
+                    {/* Табы для переключения между таблицами */}
+                    <div className="bg-gray-800 rounded-lg border border-red-900/30 shadow-md mb-8">
+                        <div className="border-b border-red-900/30 flex">
+                            <TabButton
+                                active={activeTab === "users"}
+                                onClick={() => setActiveTab("users")}
+                            >
+                                {isRootAdmin
+                                    ? "Управление пользователями"
+                                    : "Пользователи"}
+                            </TabButton>
+                            <TabButton
+                                active={activeTab === "locations"}
+                                onClick={() => setActiveTab("locations")}
+                            >
+                                Локации
+                            </TabButton>
                         </div>
 
-                        {/* Популярные локации */}
-                        <div className="bg-gray-800 rounded-lg border border-red-900/30 shadow-md">
-                            <div className="p-4 border-b border-red-900/30">
-                                <h2 className="text-xl font-medieval text-red-400">
-                                    Популярные локации
-                                </h2>
-                            </div>
-                            <div className="p-4">
+                        {/* Содержимое табов */}
+                        <div className="p-4">
+                            {activeTab === "users" && (
+                                <>
+                                    {usersLoading ? (
+                                        <div className="flex justify-center py-8">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-red-600"></div>
+                                        </div>
+                                    ) : (
+                                        <table className="min-w-full divide-y divide-gray-700">
+                                            <thead>
+                                                <tr>
+                                                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
+                                                        Имя
+                                                    </th>
+                                                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
+                                                        Email
+                                                    </th>
+                                                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
+                                                        Роль
+                                                    </th>
+                                                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
+                                                        Дата регистрации
+                                                    </th>
+                                                    {isRootAdmin && (
+                                                        <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
+                                                            Управление
+                                                        </th>
+                                                    )}
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-700">
+                                                {usersToShow.map((user) => (
+                                                    <tr key={user.id}>
+                                                        <td className="px-4 py-3 text-gray-300">
+                                                            {user.name}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-gray-300">
+                                                            {user.email}
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <span
+                                                                className={`px-2 py-1 rounded-full text-xs ${
+                                                                    user.role ===
+                                                                    "admin"
+                                                                        ? "bg-red-900/30 text-red-300"
+                                                                        : user.role ===
+                                                                          "support"
+                                                                        ? "bg-blue-900/30 text-blue-300"
+                                                                        : "bg-gray-700 text-gray-300"
+                                                                }`}
+                                                            >
+                                                                {user.role ===
+                                                                    "admin" &&
+                                                                user.is_root
+                                                                    ? "Главный администратор"
+                                                                    : user.role ===
+                                                                      "admin"
+                                                                    ? "Администратор"
+                                                                    : user.role ===
+                                                                      "support"
+                                                                    ? "Сотрудник поддержки"
+                                                                    : "Пользователь"}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-gray-300">
+                                                            {new Date(
+                                                                user.created_at
+                                                            ).toLocaleDateString()}
+                                                        </td>
+                                                        {isRootAdmin && (
+                                                            <td className="px-4 py-3">
+                                                                {user.id !==
+                                                                authStore.user
+                                                                    ?.id ? (
+                                                                    <RoleSelector
+                                                                        userId={
+                                                                            user.id
+                                                                        }
+                                                                        currentRole={
+                                                                            user.role
+                                                                        }
+                                                                        onRoleChanged={
+                                                                            handleRoleChange
+                                                                        }
+                                                                    />
+                                                                ) : (
+                                                                    <span className="text-gray-500 text-sm italic">
+                                                                        Нельзя
+                                                                        изменить
+                                                                        свою
+                                                                        роль
+                                                                    </span>
+                                                                )}
+                                                            </td>
+                                                        )}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </>
+                            )}
+
+                            {activeTab === "locations" && (
                                 <table className="min-w-full divide-y divide-gray-700">
                                     <thead>
                                         <tr>
@@ -282,6 +471,9 @@ const AdminDashboard: React.FC = () => {
                                             </th>
                                             <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
                                                 Посетителей
+                                            </th>
+                                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-400 uppercase">
+                                                Описание
                                             </th>
                                         </tr>
                                     </thead>
@@ -317,18 +509,21 @@ const AdminDashboard: React.FC = () => {
                                                             location.visitors_count
                                                         }
                                                     </td>
+                                                    <td className="px-4 py-3 text-gray-300 max-w-md truncate">
+                                                        {location.description}
+                                                    </td>
                                                 </tr>
                                             )
                                         )}
                                     </tbody>
                                 </table>
-                            </div>
+                            )}
                         </div>
                     </div>
                 </>
             )}
         </AdminLayout>
     );
-};
+});
 
 export default AdminDashboard;
