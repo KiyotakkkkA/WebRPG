@@ -38,9 +38,9 @@ class LocationController extends Controller
 
         // Получаем текущую локацию персонажа
         $currentLocation = $character->current_location_id
-            ? Location::with(['requirements', 'objects', 'resources', 'events'])
+            ? Location::with(['requirements', 'objects', 'resources', 'events', 'region'])
                 ->find($character->current_location_id)
-            : Location::with(['requirements', 'objects', 'resources', 'events'])
+            : Location::with(['requirements', 'objects', 'resources', 'events', 'region'])
                 ->where('is_default', true)->first();
 
         if (!$currentLocation) {
@@ -78,7 +78,7 @@ class LocationController extends Controller
         \Log::debug("Все локации для отображения: " . implode(', ', $allLocationIds));
 
         // Получаем полную информацию обо всех локациях
-        $locations = Location::with(['requirements', 'objects', 'resources', 'events'])
+        $locations = Location::with(['requirements', 'objects', 'resources', 'events', 'region'])
             ->whereIn('id', $allLocationIds)
             ->get();
 
@@ -168,7 +168,7 @@ class LocationController extends Controller
         }
 
         // Получаем локацию со всеми связанными данными
-        $location = Location::with(['requirements', 'objects', 'resources', 'events', 'connectedLocations'])
+        $location = Location::with(['requirements', 'objects', 'resources', 'events', 'connectedLocations', 'region'])
             ->findOrFail($locationId);
 
         // Проверяем, доступна ли локация для персонажа

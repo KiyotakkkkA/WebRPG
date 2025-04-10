@@ -29,16 +29,41 @@ interface SupportMessage {
     rated_at?: string | null;
 }
 
+// Интерфейс для пагинации
+interface PaginatedResponse<T> {
+    current_page: number;
+    data: T[];
+    from: number;
+    last_page: number;
+    per_page: number;
+    to: number;
+    total: number;
+}
+
+// Параметры фильтрации и сортировки
+interface FilterParams {
+    status?: string;
+    type?: string;
+    archived?: boolean;
+    search?: string;
+    date_from?: string;
+    date_to?: string;
+    sort_by?: string;
+    sort_order?: "asc" | "desc";
+    per_page?: number;
+    page?: number;
+}
+
 // API функции для работы с сообщениями поддержки
 const supportApi = {
     // Получение списка сообщений
-    getMessages: async (filters?: {
-        status?: string;
-        type?: string;
-        archived?: boolean;
-    }) => {
+    getMessages: async (
+        filters?: FilterParams
+    ): Promise<PaginatedResponse<SupportMessage>> => {
         try {
             const queryParams = new URLSearchParams();
+
+            // Фильтры
             if (filters?.status && filters.status !== "all") {
                 queryParams.append("status", filters.status);
             }
@@ -48,12 +73,37 @@ const supportApi = {
             if (filters?.archived !== undefined) {
                 queryParams.append("archived", filters.archived ? "1" : "0");
             }
+            if (filters?.search) {
+                queryParams.append("search", filters.search);
+            }
+            if (filters?.date_from) {
+                queryParams.append("date_from", filters.date_from);
+            }
+            if (filters?.date_to) {
+                queryParams.append("date_to", filters.date_to);
+            }
+
+            // Сортировка
+            if (filters?.sort_by) {
+                queryParams.append("sort_by", filters.sort_by);
+            }
+            if (filters?.sort_order) {
+                queryParams.append("sort_order", filters.sort_order);
+            }
+
+            // Пагинация
+            if (filters?.per_page) {
+                queryParams.append("per_page", filters.per_page.toString());
+            }
+            if (filters?.page) {
+                queryParams.append("page", filters.page.toString());
+            }
 
             const url = `/api/support-messages${
                 queryParams.toString() ? `?${queryParams.toString()}` : ""
             }`;
             const response = await axios.get(url);
-            return response.data.data || response.data;
+            return response.data;
         } catch (error) {
             console.error("Error fetching support messages:", error);
             throw new Error("Не удалось загрузить сообщения поддержки");
@@ -309,6 +359,259 @@ const SupportStats = () => {
     );
 };
 
+// Компонент пагинации
+const Pagination = ({
+    currentPage,
+    lastPage,
+    total,
+    perPage,
+    onPageChange,
+    onPerPageChange,
+}: {
+    currentPage: number;
+    lastPage: number;
+    total: number;
+    perPage: number;
+    onPageChange: (page: number) => void;
+    onPerPageChange: (perPage: number) => void;
+}) => {
+    // Вычисляем страницы для отображения (максимум 5 страниц)
+    const getPageNumbers = () => {
+        const pages = [];
+        const maxPages = 5; // Максимум 5 страниц в пагинации
+        let startPage = Math.max(1, currentPage - Math.floor(maxPages / 2));
+        let endPage = startPage + maxPages - 1;
+
+        if (endPage > lastPage) {
+            endPage = lastPage;
+            startPage = Math.max(1, endPage - maxPages + 1);
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            pages.push(i);
+        }
+
+        return pages;
+    };
+
+    const pageNumbers = getPageNumbers();
+
+    return (
+        <div className="mt-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="text-sm text-gray-400">
+                Показано {Math.min((currentPage - 1) * perPage + 1, total)}-
+                {Math.min(currentPage * perPage, total)} из {total} записей
+            </div>
+
+            <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-400">
+                        Записей на странице:
+                    </span>
+                    <select
+                        className="bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm p-1 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/30"
+                        value={perPage}
+                        onChange={(e) =>
+                            onPerPageChange(Number(e.target.value))
+                        }
+                    >
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+
+                <div className="flex items-center">
+                    <button
+                        onClick={() => onPageChange(1)}
+                        disabled={currentPage === 1}
+                        className={`w-8 h-8 flex items-center justify-center rounded-l border border-gray-700 ${
+                            currentPage === 1
+                                ? "bg-gray-800/30 text-gray-600"
+                                : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                        }`}
+                    >
+                        <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+                            ></path>
+                        </svg>
+                    </button>
+
+                    <button
+                        onClick={() => onPageChange(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className={`w-8 h-8 flex items-center justify-center border-t border-b border-gray-700 ${
+                            currentPage === 1
+                                ? "bg-gray-800/30 text-gray-600"
+                                : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                        }`}
+                    >
+                        <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M15 19l-7-7 7-7"
+                            ></path>
+                        </svg>
+                    </button>
+
+                    {pageNumbers.map((page) => (
+                        <button
+                            key={page}
+                            onClick={() => onPageChange(page)}
+                            className={`w-8 h-8 flex items-center justify-center text-sm border-t border-b border-gray-700 ${
+                                currentPage === page
+                                    ? "bg-red-900/20 text-red-400 border-red-900/30 font-medium"
+                                    : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                            }`}
+                        >
+                            {page}
+                        </button>
+                    ))}
+
+                    <button
+                        onClick={() => onPageChange(currentPage + 1)}
+                        disabled={currentPage === lastPage}
+                        className={`w-8 h-8 flex items-center justify-center border-t border-b border-gray-700 ${
+                            currentPage === lastPage
+                                ? "bg-gray-800/30 text-gray-600"
+                                : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                        }`}
+                    >
+                        <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M9 5l7 7-7 7"
+                            ></path>
+                        </svg>
+                    </button>
+
+                    <button
+                        onClick={() => onPageChange(lastPage)}
+                        disabled={currentPage === lastPage}
+                        className={`w-8 h-8 flex items-center justify-center rounded-r border border-gray-700 ${
+                            currentPage === lastPage
+                                ? "bg-gray-800/30 text-gray-600"
+                                : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                        }`}
+                    >
+                        <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M13 5l7 7-7 7M5 5l7 7-7 7"
+                            ></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Компонент строки сортировки
+const SortControl = ({
+    sortBy,
+    sortOrder,
+    onSortChange,
+}: {
+    sortBy: string;
+    sortOrder: "asc" | "desc";
+    onSortChange: (field: string, order: "asc" | "desc") => void;
+}) => {
+    const sortOptions = [
+        { value: "created_at", label: "По дате" },
+        { value: "status", label: "По статусу" },
+        { value: "type", label: "По типу" },
+        { value: "name", label: "По имени" },
+        { value: "character_name", label: "По персонажу" },
+    ];
+
+    const handleSortChange = (field: string) => {
+        // Если выбрано то же поле, меняем порядок сортировки
+        if (field === sortBy) {
+            onSortChange(field, sortOrder === "asc" ? "desc" : "asc");
+        } else {
+            // Если выбрано новое поле, устанавливаем его с порядком по умолчанию (desc)
+            onSortChange(field, "desc");
+        }
+    };
+
+    return (
+        <div className="flex flex-wrap gap-2 mt-3 mb-4">
+            <div className="text-xs text-gray-400 flex items-center mr-2">
+                СОРТИРОВКА:
+            </div>
+            {sortOptions.map((option) => (
+                <button
+                    key={option.value}
+                    onClick={() => handleSortChange(option.value)}
+                    className={`text-xs px-2 py-1 rounded flex items-center gap-1 ${
+                        sortBy === option.value
+                            ? "bg-red-900/20 text-red-400 border border-red-900/30"
+                            : "bg-gray-800 text-gray-300 border border-gray-700"
+                    }`}
+                >
+                    {option.label}
+                    {sortBy === option.value && (
+                        <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d={
+                                    sortOrder === "asc"
+                                        ? "M5 15l7-7 7 7"
+                                        : "M19 9l-7 7-7-7"
+                                }
+                            ></path>
+                        </svg>
+                    )}
+                </button>
+            ))}
+        </div>
+    );
+};
+
 const SupportMessages: React.FC = () => {
     const queryClient = useQueryClient();
     const [currentMessage, setCurrentMessage] = useState<SupportMessage | null>(
@@ -319,6 +622,16 @@ const SupportMessages: React.FC = () => {
     const [typeFilter, setTypeFilter] = useState<string>("all");
     const [isArchiveMode, setIsArchiveMode] = useState<boolean>(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [searchQuery, setSearchQuery] = useState<string>("");
+    const [dateFrom, setDateFrom] = useState<string>("");
+    const [dateTo, setDateTo] = useState<string>("");
+    const [sortBy, setSortBy] = useState<string>("created_at");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+    const [currentPage, setCurrentPage] = useState<number>(1);
+    const [perPage, setPerPage] = useState<number>(20);
+    const [showFilters, setShowFilters] = useState<boolean>(false);
+    const [isAdvancedSearchEnabled, setIsAdvancedSearchEnabled] =
+        useState<boolean>(false);
 
     // Запрос на получение сообщений с фильтрацией
     const {
@@ -327,12 +640,31 @@ const SupportMessages: React.FC = () => {
         error,
         refetch,
     } = useQuery({
-        queryKey: ["supportMessages", statusFilter, typeFilter, isArchiveMode],
+        queryKey: [
+            "supportMessages",
+            statusFilter,
+            typeFilter,
+            isArchiveMode,
+            searchQuery,
+            dateFrom,
+            dateTo,
+            sortBy,
+            sortOrder,
+            currentPage,
+            perPage,
+        ],
         queryFn: () =>
             supportApi.getMessages({
                 status: statusFilter,
                 type: typeFilter,
                 archived: isArchiveMode,
+                search: searchQuery,
+                date_from: dateFrom,
+                date_to: dateTo,
+                sort_by: sortBy,
+                sort_order: sortOrder,
+                page: currentPage,
+                per_page: perPage,
             }),
         refetchOnWindowFocus: false,
         staleTime: 60000, // Данные считаются "свежими" в течение 1 минуты
@@ -590,9 +922,47 @@ const SupportMessages: React.FC = () => {
         );
     };
 
+    // Обработчики для пагинации и фильтрации
+    const handlePageChange = (page: number) => {
+        setCurrentPage(page);
+        // Сбрасываем выбранное сообщение при смене страницы
+        setCurrentMessage(null);
+    };
+
+    const handlePerPageChange = (newPerPage: number) => {
+        setPerPage(newPerPage);
+        // При изменении количества записей переходим на первую страницу
+        setCurrentPage(1);
+    };
+
+    const handleSortChange = (field: string, order: "asc" | "desc") => {
+        setSortBy(field);
+        setSortOrder(order);
+    };
+
+    // Функция для сброса всех фильтров
+    const resetFilters = () => {
+        setStatusFilter("all");
+        setTypeFilter("all");
+        setSearchQuery("");
+        setDateFrom("");
+        setDateTo("");
+        setSortBy("created_at");
+        setSortOrder("desc");
+        setCurrentPage(1);
+    };
+
+    // Обработчик поиска
+    const handleSearch = (e: React.FormEvent) => {
+        e.preventDefault();
+        // При поиске переходим на первую страницу
+        setCurrentPage(1);
+        // Фактический поиск выполняется через запрос при изменении searchQuery
+    };
+
     return (
         <MainLayout>
-            <div className="relative min-h-screen">
+            <div className="min-h-screen bg-gray-900 text-gray-200 relative support-admin-panel">
                 {/* Фоновое изображение */}
                 <div className="absolute inset-0 bg-[url('/images/backgrounds/menu_bg.jpg')] bg-cover bg-center opacity-30"></div>
                 <div className="absolute inset-0 bg-gradient-to-t from-gray-900 via-gray-900/80 to-gray-900/60 backdrop-blur-[1px]"></div>
@@ -603,31 +973,66 @@ const SupportMessages: React.FC = () => {
                 <div className="absolute bottom-10 left-10 w-20 h-20 border-b border-l border-red-700/50 animate-pulse"></div>
                 <div className="absolute bottom-10 right-10 w-20 h-20 border-b border-r border-red-700/50 animate-pulse"></div>
 
-                <div className="container mx-auto px-4 py-8 max-w-7xl relative z-10">
+                <div className="container mx-auto px-4 py-8 max-w-[calc(100%-10%)] relative z-10">
                     <div className="bg-gray-900/80 backdrop-blur-sm border border-red-900/30 rounded-lg shadow-xl p-6">
-                        <div className="flex justify-between items-center mb-6">
+                        <div className="flex flex-wrap justify-between items-center mb-6">
                             <h1 className="text-2xl text-gray-200 font-medieval">
                                 {isArchiveMode
                                     ? "Архив заявок поддержки"
                                     : "Сообщения поддержки"}
                             </h1>
 
-                            {/* Переключатель между обычным режимом и архивом */}
-                            <button
-                                className={`px-4 py-2 rounded text-sm ${
-                                    isArchiveMode
-                                        ? "bg-gray-700 text-white"
-                                        : "bg-green-900/70 text-white"
-                                }`}
-                                onClick={() => {
-                                    setIsArchiveMode(!isArchiveMode);
-                                    setCurrentMessage(null);
-                                }}
-                            >
-                                {isArchiveMode
-                                    ? "← Вернуться к обычным заявкам"
-                                    : "Перейти в архив"}
-                            </button>
+                            <div className="flex gap-3 mt-3 sm:mt-0">
+                                {/* Кнопка переключения режима отображения фильтров */}
+                                <button
+                                    className={`px-3 py-2 rounded text-sm ${
+                                        showFilters
+                                            ? "bg-red-900/40 text-red-400 border border-red-900/30"
+                                            : "bg-gray-800 text-gray-300 border border-gray-700"
+                                    }`}
+                                    onClick={() => setShowFilters(!showFilters)}
+                                >
+                                    <div className="flex items-center gap-1">
+                                        <svg
+                                            className="w-4 h-4"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth="2"
+                                                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+                                            ></path>
+                                        </svg>
+                                        <span>
+                                            {showFilters
+                                                ? "Скрыть фильтры"
+                                                : "Фильтры"}
+                                        </span>
+                                    </div>
+                                </button>
+
+                                {/* Переключатель между обычным режимом и архивом */}
+                                <button
+                                    className={`px-4 py-2 rounded text-sm ${
+                                        isArchiveMode
+                                            ? "bg-gray-700 text-white"
+                                            : "bg-green-900/70 text-white"
+                                    }`}
+                                    onClick={() => {
+                                        setIsArchiveMode(!isArchiveMode);
+                                        setCurrentMessage(null);
+                                        setCurrentPage(1); // Сбрасываем на первую страницу при переключении
+                                    }}
+                                >
+                                    {isArchiveMode
+                                        ? "← Вернуться к обычным заявкам"
+                                        : "Перейти в архив"}
+                                </button>
+                            </div>
                         </div>
 
                         <SectionTitle>
@@ -638,21 +1043,64 @@ const SupportMessages: React.FC = () => {
 
                         {!isArchiveMode && <SupportStats />}
 
-                        <div className="flex flex-col lg:flex-row gap-6">
-                            {/* Список сообщений */}
-                            <div className="lg:w-1/2">
-                                {/* Фильтры */}
-                                <div className="flex flex-wrap gap-3 mb-4">
+                        {/* Блок с расширенными фильтрами */}
+                        {showFilters && (
+                            <div className="bg-gray-800/50 rounded-lg border border-gray-700 p-4 mb-6 animate-fadeIn">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {/* Строка поиска */}
+                                    <div>
+                                        <label className="text-gray-400 text-xs block mb-1">
+                                            ПОИСК
+                                        </label>
+                                        <form
+                                            onSubmit={handleSearch}
+                                            className="flex"
+                                        >
+                                            <input
+                                                type="text"
+                                                value={searchQuery}
+                                                onChange={(e) =>
+                                                    setSearchQuery(
+                                                        e.target.value
+                                                    )
+                                                }
+                                                placeholder="Поиск по имени, email или сообщению..."
+                                                className="flex-grow bg-gray-900 border border-gray-700 rounded-l text-gray-200 text-sm p-1.5 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/30"
+                                            />
+                                            <button
+                                                type="submit"
+                                                className="bg-gray-700 hover:bg-gray-600 text-gray-300 p-1.5 rounded-r border border-gray-700"
+                                            >
+                                                <svg
+                                                    className="w-5 h-5"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    viewBox="0 0 24 24"
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        strokeWidth="2"
+                                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                                                    ></path>
+                                                </svg>
+                                            </button>
+                                        </form>
+                                    </div>
+
+                                    {/* Фильтр по статусу */}
                                     <div>
                                         <label className="text-gray-400 text-xs block mb-1">
                                             СТАТУС
                                         </label>
                                         <select
-                                            className="bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm p-1.5"
+                                            className="w-full bg-gray-900 border border-gray-700 rounded text-gray-200 text-sm p-1.5 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/30"
                                             value={statusFilter}
-                                            onChange={(e) =>
-                                                setStatusFilter(e.target.value)
-                                            }
+                                            onChange={(e) => {
+                                                setStatusFilter(e.target.value);
+                                                setCurrentPage(1); // Сбрасываем страницу при изменении фильтра
+                                            }}
                                         >
                                             <option value="all">ВСЕ</option>
                                             <option value="new">НОВЫЕ</option>
@@ -665,16 +1113,18 @@ const SupportMessages: React.FC = () => {
                                         </select>
                                     </div>
 
+                                    {/* Фильтр по типу */}
                                     <div>
                                         <label className="text-gray-400 text-xs block mb-1">
                                             ТИП
                                         </label>
                                         <select
-                                            className="bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm p-1.5"
+                                            className="w-full bg-gray-900 border border-gray-700 rounded text-gray-200 text-sm p-1.5 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/30"
                                             value={typeFilter}
-                                            onChange={(e) =>
-                                                setTypeFilter(e.target.value)
-                                            }
+                                            onChange={(e) => {
+                                                setTypeFilter(e.target.value);
+                                                setCurrentPage(1); // Сбрасываем страницу при изменении фильтра
+                                            }}
                                         >
                                             <option value="all">ВСЕ</option>
                                             <option value="question">
@@ -693,7 +1143,139 @@ const SupportMessages: React.FC = () => {
                                         </select>
                                     </div>
 
-                                    <div className="ml-auto self-end">
+                                    {/* Фильтр по дате "от" */}
+                                    <div>
+                                        <label className="text-gray-400 text-xs block mb-1">
+                                            ДАТА ОТ
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={dateFrom}
+                                            onChange={(e) => {
+                                                setDateFrom(e.target.value);
+                                                setCurrentPage(1); // Сбрасываем страницу при изменении фильтра
+                                            }}
+                                            className="w-full bg-gray-900 border border-gray-700 rounded text-gray-200 text-sm p-1.5 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/30"
+                                        />
+                                    </div>
+
+                                    {/* Фильтр по дате "до" */}
+                                    <div>
+                                        <label className="text-gray-400 text-xs block mb-1">
+                                            ДАТА ДО
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={dateTo}
+                                            onChange={(e) => {
+                                                setDateTo(e.target.value);
+                                                setCurrentPage(1); // Сбрасываем страницу при изменении фильтра
+                                            }}
+                                            className="w-full bg-gray-900 border border-gray-700 rounded text-gray-200 text-sm p-1.5 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/30"
+                                        />
+                                    </div>
+
+                                    {/* Кнопка сброса фильтров */}
+                                    <div className="flex items-end">
+                                        <button
+                                            onClick={resetFilters}
+                                            className="bg-gray-700 hover:bg-gray-600 text-gray-300 py-1.5 px-4 rounded border border-gray-700 flex items-center gap-1"
+                                        >
+                                            <svg
+                                                className="w-4 h-4"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                                xmlns="http://www.w3.org/2000/svg"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth="2"
+                                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                                ></path>
+                                            </svg>
+                                            СБРОСИТЬ ФИЛЬТРЫ
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Компонент сортировки */}
+                                <SortControl
+                                    sortBy={sortBy}
+                                    sortOrder={sortOrder}
+                                    onSortChange={handleSortChange}
+                                />
+                            </div>
+                        )}
+
+                        <div className="flex flex-col lg:flex-row gap-6">
+                            {/* Список сообщений */}
+                            <div className="lg:w-1/2">
+                                {/* Панель инструментов над списком */}
+                                <div className="flex flex-wrap justify-between items-center mb-4">
+                                    <div className="flex gap-2">
+                                        {!showFilters && (
+                                            <>
+                                                {/* Упрощенные фильтры (если не показаны расширенные) */}
+                                                <select
+                                                    className="bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm p-1.5 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/30"
+                                                    value={statusFilter}
+                                                    onChange={(e) => {
+                                                        setStatusFilter(
+                                                            e.target.value
+                                                        );
+                                                        setCurrentPage(1);
+                                                    }}
+                                                >
+                                                    <option value="all">
+                                                        ВСЕ СТАТУСЫ
+                                                    </option>
+                                                    <option value="new">
+                                                        НОВЫЕ
+                                                    </option>
+                                                    <option value="in_progress">
+                                                        В ОБРАБОТКЕ
+                                                    </option>
+                                                    <option value="closed">
+                                                        РЕШЕНО
+                                                    </option>
+                                                </select>
+
+                                                <select
+                                                    className="bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm p-1.5 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/30"
+                                                    value={typeFilter}
+                                                    onChange={(e) => {
+                                                        setTypeFilter(
+                                                            e.target.value
+                                                        );
+                                                        setCurrentPage(1);
+                                                    }}
+                                                >
+                                                    <option value="all">
+                                                        ВСЕ ТИПЫ
+                                                    </option>
+                                                    <option value="question">
+                                                        ВОПРОСЫ
+                                                    </option>
+                                                    <option value="bug">
+                                                        БАГИ
+                                                    </option>
+                                                    <option value="suggestion">
+                                                        ПРЕДЛОЖЕНИЯ
+                                                    </option>
+                                                    <option value="account">
+                                                        АККАУНТ
+                                                    </option>
+                                                    <option value="other">
+                                                        ДРУГОЕ
+                                                    </option>
+                                                </select>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    <div>
                                         <button
                                             className="bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm py-1.5 px-3 rounded border border-gray-700 flex items-center gap-1"
                                             onClick={forceRefresh}
@@ -722,6 +1304,7 @@ const SupportMessages: React.FC = () => {
                                     </div>
                                 </div>
 
+                                {/* Отображение списка сообщений */}
                                 {isLoading || isRefreshing ? (
                                     <div className="flex justify-center my-8">
                                         <div className="animate-spin h-8 w-8 border-4 border-red-600 rounded-full border-t-transparent"></div>
@@ -732,88 +1315,110 @@ const SupportMessages: React.FC = () => {
                                             ? error.message
                                             : "Произошла ошибка при загрузке данных"}
                                     </div>
-                                ) : !messages || messages.length === 0 ? (
+                                ) : !messages || messages.data.length === 0 ? (
                                     <div className="text-center py-8 text-gray-400">
                                         Нет сообщений, соответствующих фильтрам
                                     </div>
                                 ) : (
-                                    <div className="space-y-3">
-                                        {messages.map(
-                                            (message: SupportMessage) => (
-                                                <div
-                                                    key={message.id}
-                                                    className={`border border-gray-800 rounded-lg p-4 transition-colors cursor-pointer ${
-                                                        currentMessage?.id ===
-                                                        message.id
-                                                            ? "bg-red-900/10 border-red-900/30"
-                                                            : "bg-gray-800/40 hover:bg-gray-800/80"
-                                                    }`}
-                                                    onClick={() =>
-                                                        openMessage(message)
-                                                    }
-                                                >
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <h3 className="font-medieval text-red-400">
-                                                            {message.name}
-                                                        </h3>
-                                                        <div className="flex gap-2">
-                                                            <StatusBadge
-                                                                status={
-                                                                    message.status
-                                                                }
-                                                            />
-                                                            <ModerationBadge
-                                                                message={
-                                                                    message
-                                                                }
-                                                                isArchiveMode={
-                                                                    isArchiveMode
-                                                                }
-                                                            />
+                                    <>
+                                        <div className="space-y-3">
+                                            {messages.data.map(
+                                                (message: SupportMessage) => (
+                                                    <div
+                                                        key={message.id}
+                                                        className={`border border-gray-800 rounded-lg p-4 transition-colors cursor-pointer message-card ${
+                                                            currentMessage?.id ===
+                                                            message.id
+                                                                ? "bg-red-900/10 border-red-900/30"
+                                                                : "bg-gray-800/40 hover:bg-gray-800/80"
+                                                        }`}
+                                                        onClick={() =>
+                                                            openMessage(message)
+                                                        }
+                                                    >
+                                                        {/* Содержимое карточки сообщения */}
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <h3 className="font-medieval text-red-400">
+                                                                {message.name}
+                                                            </h3>
+                                                            <div className="flex gap-2">
+                                                                <StatusBadge
+                                                                    status={
+                                                                        message.status
+                                                                    }
+                                                                />
+                                                                <ModerationBadge
+                                                                    message={
+                                                                        message
+                                                                    }
+                                                                    isArchiveMode={
+                                                                        isArchiveMode
+                                                                    }
+                                                                />
+                                                            </div>
                                                         </div>
-                                                    </div>
 
-                                                    <div className="flex items-center gap-3 text-xs text-gray-400 mb-2">
-                                                        <TypeBadge
-                                                            type={message.type}
-                                                        />
-                                                        <span>
-                                                            {formatDate(
-                                                                message.created_at
-                                                            )}
-                                                        </span>
-                                                        {message.character_name && (
-                                                            <span className="text-gray-500">
-                                                                Персонаж:{" "}
-                                                                {
-                                                                    message.character_name
+                                                        <div className="flex items-center gap-3 text-xs text-gray-400 mb-2">
+                                                            <TypeBadge
+                                                                type={
+                                                                    message.type
                                                                 }
+                                                            />
+                                                            <span>
+                                                                {formatDate(
+                                                                    message.created_at
+                                                                )}
                                                             </span>
+                                                            {message.character_name && (
+                                                                <span className="text-gray-500">
+                                                                    Персонаж:{" "}
+                                                                    {
+                                                                        message.character_name
+                                                                    }
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        <p className="text-gray-300 text-sm line-clamp-2 mb-1">
+                                                            {message.message}
+                                                        </p>
+
+                                                        {message.response && (
+                                                            <div className="text-xs text-gray-500 mt-2">
+                                                                <span className="text-gray-400">
+                                                                    Ответ:
+                                                                </span>{" "}
+                                                                {message.response.substring(
+                                                                    0,
+                                                                    60
+                                                                )}
+                                                                {message
+                                                                    .response
+                                                                    .length >
+                                                                    60 && "..."}
+                                                            </div>
                                                         )}
                                                     </div>
+                                                )
+                                            )}
+                                        </div>
 
-                                                    <p className="text-gray-300 text-sm line-clamp-2 mb-1">
-                                                        {message.message}
-                                                    </p>
-
-                                                    {message.response && (
-                                                        <div className="text-xs text-gray-500 mt-2">
-                                                            <span className="text-gray-400">
-                                                                Ответ:
-                                                            </span>{" "}
-                                                            {message.response.substring(
-                                                                0,
-                                                                60
-                                                            )}
-                                                            {message.response
-                                                                .length > 60 &&
-                                                                "..."}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )
+                                        {/* Компонент пагинации */}
+                                        {messages && (
+                                            <Pagination
+                                                currentPage={
+                                                    messages.current_page
+                                                }
+                                                lastPage={messages.last_page}
+                                                total={messages.total}
+                                                perPage={messages.per_page}
+                                                onPageChange={handlePageChange}
+                                                onPerPageChange={
+                                                    handlePerPageChange
+                                                }
+                                            />
                                         )}
-                                    </div>
+                                    </>
                                 )}
                             </div>
 
@@ -1071,14 +1676,14 @@ const SupportMessages: React.FC = () => {
                                                     Ответ:
                                                 </h3>
                                                 <textarea
-                                                    className="w-full bg-gray-900/70 border border-gray-700 rounded-md p-3 text-gray-300 focus:outline-none focus:ring-2 focus:ring-red-900/50 focus:border-red-800/50 transition-all shadow-inner mb-4"
-                                                    rows={5}
                                                     value={responseText}
                                                     onChange={(e) =>
                                                         setResponseText(
                                                             e.target.value
                                                         )
                                                     }
+                                                    rows={8}
+                                                    className="w-full bg-gray-800/80 text-gray-300 p-3 rounded-lg border border-gray-700 focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/30 mt-2"
                                                     placeholder={
                                                         !currentMessage.on_moderation ||
                                                         currentMessage.moderator_id !==
@@ -1092,7 +1697,7 @@ const SupportMessages: React.FC = () => {
                                                         currentMessage.moderator_id !==
                                                             authStore.user?.id
                                                     }
-                                                />
+                                                ></textarea>
 
                                                 <div className="flex flex-wrap justify-between gap-3">
                                                     <div className="space-x-2">

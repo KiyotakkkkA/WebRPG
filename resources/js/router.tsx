@@ -14,12 +14,14 @@ import AdminDashboard from "./Pages/Admin/AdminDashboard";
 import AdminLocations from "./Pages/Admin/AdminLocations";
 import AdminLocationConnections from "./Pages/Admin/AdminLocationConnections";
 import AdminLocationRequirements from "./Pages/Admin/AdminLocationRequirements";
+import AdminRegions from "./Pages/Admin/AdminRegions";
 import TermsOfService from "./Pages/TermsOfService";
 import Support from "./Pages/Support";
 import SupportMessages from "./Pages/SupportAdmin/SupportMessages";
 import Help from "./Pages/Help/Help";
 import Profile from "./Pages/Profile/Profile";
 import MyMessages from "./Pages/Profile/MyMessages";
+import WorldMap from "./Pages/Game/WorldMap";
 
 const MRouter: React.FC = () => {
     return (
@@ -155,6 +157,24 @@ const MRouter: React.FC = () => {
                         <AdminRoute>
                             <AdminLocationRequirements />
                         </AdminRoute>
+                    }
+                />
+                <Route
+                    path="/admin/regions"
+                    element={
+                        <AdminRoute>
+                            <AdminRegions />
+                        </AdminRoute>
+                    }
+                />
+
+                {/* Новый маршрут для WorldMap */}
+                <Route
+                    path="/world-map/:characterId"
+                    element={
+                        <PrivateRoute>
+                            <WorldMap />
+                        </PrivateRoute>
                     }
                 />
             </Routes>

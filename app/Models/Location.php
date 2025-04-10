@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +20,7 @@ class Location extends Model
      */
     protected $fillable = [
         'id',
+        'region_id',
         'name',
         'description',
         'image_url',
@@ -35,12 +37,21 @@ class Location extends Model
      * @var array<string, string>
      */
     protected $casts = [
+        'region_id' => 'integer',
         'danger_level' => 'integer',
         'is_default' => 'boolean',
         'is_discoverable' => 'boolean',
         'position_x' => 'integer',
         'position_y' => 'integer',
     ];
+
+    /**
+     * Получить регион, к которому принадлежит локация
+     */
+    public function region(): BelongsTo
+    {
+        return $this->belongsTo(Region::class);
+    }
 
     /**
      * Получить персонажей, находящихся в этой локации.

@@ -30,6 +30,13 @@ interface Character {
     updated_at: string;
 }
 
+// Интерфейс для наград от боя
+interface CombatRewards {
+    experience: number;
+    gold: number;
+    items: string[];
+}
+
 class CharacterStore {
     characters: Character[] = [];
     selectedCharacter: Character | null = null;
@@ -56,12 +63,14 @@ class CharacterStore {
                 this.remainingSlots = response.data.remaining_slots;
                 this.canCreateMore = response.data.can_create_more;
             });
+            return this.characters;
         } catch (error: any) {
             runInAction(() => {
                 this.error =
                     error.response?.data?.message ||
                     "Ошибка загрузки персонажей";
             });
+            return [];
         } finally {
             runInAction(() => {
                 this.isLoading = false;
@@ -140,6 +149,15 @@ class CharacterStore {
 
     // Получить информацию о конкретном персонаже
     async loadCharacter(id: number) {
+        // Если персонаж уже загружен и его ID совпадает, не делаем повторный запрос
+        if (
+            this.selectedCharacter &&
+            this.selectedCharacter.id === id &&
+            !this.isLoading
+        ) {
+            return this.selectedCharacter;
+        }
+
         this.isLoading = true;
         this.error = null;
 
@@ -148,12 +166,14 @@ class CharacterStore {
             runInAction(() => {
                 this.selectedCharacter = response.data.character;
             });
+            return response.data.character;
         } catch (error: any) {
             runInAction(() => {
                 this.error =
                     error.response?.data?.message ||
                     "Ошибка загрузки персонажа";
             });
+            return null;
         } finally {
             runInAction(() => {
                 this.isLoading = false;
@@ -243,6 +263,252 @@ class CharacterStore {
     // Сбросить ошибку
     resetError() {
         this.error = null;
+    }
+
+    // Завершить туториал для персонажа
+    async completeTutorial(
+        characterId: number,
+        onSuccess?: () => void
+    ): Promise<boolean> {
+        try {
+            await axios.post("/api/characters/tutorial-completed", {
+                character_id: characterId,
+            });
+
+            // Если персонаж текущий, обновляем его данные
+            if (
+                this.selectedCharacter &&
+                this.selectedCharacter.id === characterId
+            ) {
+                runInAction(() => {
+                    if (this.selectedCharacter) {
+                        this.selectedCharacter.is_new = false;
+                    }
+                });
+            }
+
+            // Вызываем колбэк функцию, если она была передана
+            if (onSuccess) {
+                onSuccess();
+            }
+
+            return true;
+        } catch (error: any) {
+            console.error("Ошибка при завершении туториала:", error);
+            return false;
+        }
+    }
+
+    // Применить награды за бой к персонажу
+    applyBattleRewards(rewards: CombatRewards): void {
+        if (!this.selectedCharacter) return;
+
+        runInAction(() => {
+            // Добавляем опыт
+            if (this.selectedCharacter) {
+                this.selectedCharacter.experience += rewards.experience;
+
+                // Проверка на повышение уровня
+                if (
+                    this.selectedCharacter.experience >=
+                    this.selectedCharacter.exp_to_next_level
+                ) {
+                    this.levelUp();
+                }
+
+                // Другие изменения состояния персонажа могут быть добавлены здесь
+            }
+        });
+    }
+
+    // Повышение уровня персонажа
+    private levelUp(): void {
+        if (!this.selectedCharacter) return;
+
+        runInAction(() => {
+            if (this.selectedCharacter) {
+                this.selectedCharacter.level += 1;
+                this.selectedCharacter.experience = 0;
+                this.selectedCharacter.exp_to_next_level = Math.floor(
+                    this.selectedCharacter.exp_to_next_level * 1.5
+                );
+
+                // Увеличиваем базовые характеристики
+                this.selectedCharacter.max_health += 10;
+                this.selectedCharacter.health =
+                    this.selectedCharacter.max_health;
+                this.selectedCharacter.max_mana += 5;
+                this.selectedCharacter.mana = this.selectedCharacter.max_mana;
+                this.selectedCharacter.max_stamina += 5;
+                this.selectedCharacter.stamina =
+                    this.selectedCharacter.max_stamina;
+
+                // TODO: Можно добавить логику для увеличения других атрибутов
+            }
+        });
+    }
+
+    // Восстановить ресурсы персонажа (здоровье, мана, выносливость)
+    restoreResources(
+        health: number = 0,
+        mana: number = 0,
+        stamina: number = 0
+    ): void {
+        if (!this.selectedCharacter) return;
+
+        runInAction(() => {
+            if (this.selectedCharacter) {
+                // Восстанавливаем здоровье
+                if (health > 0) {
+                    this.selectedCharacter.health = Math.min(
+                        this.selectedCharacter.health + health,
+                        this.selectedCharacter.max_health
+                    );
+                }
+
+                // Восстанавливаем ману
+                if (mana > 0) {
+                    this.selectedCharacter.mana = Math.min(
+                        this.selectedCharacter.mana + mana,
+                        this.selectedCharacter.max_mana
+                    );
+                }
+
+                // Восстанавливаем выносливость
+                if (stamina > 0) {
+                    this.selectedCharacter.stamina = Math.min(
+                        this.selectedCharacter.stamina + stamina,
+                        this.selectedCharacter.max_stamina
+                    );
+                }
+            }
+        });
+    }
+
+    // Получить случайный предмет (возвращает название предмета)
+    getRandomItem(): string {
+        const items = [
+            "Малое зелье здоровья",
+            "Малое зелье маны",
+            "Кусок хлеба",
+            "Монета",
+            "Кусок ткани",
+            "Осколок металла",
+            "Странный кристалл",
+            "Старая карта",
+        ];
+        return items[Math.floor(Math.random() * items.length)];
+    }
+
+    // Получить случайный ресурс
+    getRandomResource(): string {
+        const resources = [
+            "Железная руда",
+            "Старая древесина",
+            "Лечебная трава",
+            "Кристаллический осколок",
+            "Таинственный гриб",
+            "Кожа животного",
+        ];
+        return resources[Math.floor(Math.random() * resources.length)];
+    }
+
+    // Обработка урона в бою
+    takeDamage(amount: number): boolean {
+        if (!this.selectedCharacter) return false;
+
+        let isDead = false;
+
+        runInAction(() => {
+            if (this.selectedCharacter) {
+                // Вычисляем урон с учетом защиты персонажа (можно улучшить)
+                const actualDamage = Math.max(1, amount);
+
+                this.selectedCharacter.health = Math.max(
+                    0,
+                    this.selectedCharacter.health - actualDamage
+                );
+
+                // Проверяем, жив ли персонаж
+                isDead = this.selectedCharacter.health <= 0;
+            }
+        });
+
+        return isDead;
+    }
+
+    // Использовать ресурс (здоровье, мана, выносливость)
+    useResource(type: "health" | "mana" | "stamina", amount: number): boolean {
+        if (!this.selectedCharacter) return false;
+
+        let success = false;
+
+        runInAction(() => {
+            if (this.selectedCharacter) {
+                switch (type) {
+                    case "health":
+                        if (this.selectedCharacter.health >= amount) {
+                            this.selectedCharacter.health -= amount;
+                            success = true;
+                        }
+                        break;
+                    case "mana":
+                        if (this.selectedCharacter.mana >= amount) {
+                            this.selectedCharacter.mana -= amount;
+                            success = true;
+                        }
+                        break;
+                    case "stamina":
+                        if (this.selectedCharacter.stamina >= amount) {
+                            this.selectedCharacter.stamina -= amount;
+                            success = true;
+                        }
+                        break;
+                }
+            }
+        });
+
+        return success;
+    }
+
+    // Проверка, соответствует ли персонаж требованиям
+    meetsRequirement(requirement: {
+        type: string;
+        parameter: string;
+        value: number | string;
+    }): boolean {
+        if (!this.selectedCharacter) return false;
+
+        const character = this.selectedCharacter;
+
+        switch (requirement.type) {
+            case "level":
+                return character.level >= Number(requirement.value);
+            case "attribute":
+                // Проверяем наличие атрибута у персонажа
+                const attributeKey = requirement.parameter as keyof Character;
+                if (attributeKey in character) {
+                    return (
+                        (character[attributeKey] as number) >=
+                        Number(requirement.value)
+                    );
+                }
+                return false;
+            // Можно добавить другие проверки...
+            default:
+                return false;
+        }
+    }
+
+    // Получить процент опыта до следующего уровня
+    getExpPercentage(): number {
+        if (!this.selectedCharacter) return 0;
+
+        return Math.floor(
+            (this.selectedCharacter.experience /
+                this.selectedCharacter.exp_to_next_level) *
+                100
+        );
     }
 }
 

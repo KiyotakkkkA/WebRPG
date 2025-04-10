@@ -19,8 +19,17 @@ export interface LocationObject {
     image_url?: string;
 }
 
+export interface Region {
+    id: number;
+    name: string;
+    description: string | null;
+    is_accessible: boolean;
+    icon: string | null;
+}
+
 export interface Location {
     id: number;
+    region_id: number;
     name: string;
     description: string;
     image_url: string;
@@ -29,13 +38,21 @@ export interface Location {
     is_discoverable: boolean;
     position_x: number;
     position_y: number;
-    is_accessible: boolean;
-    is_current: boolean;
+    is_current?: boolean;
+    is_accessible?: boolean;
     is_accessible_from_current?: boolean;
-    is_discovered?: boolean;
+    region?: Region;
+    accessibility_issue?: {
+        type: string;
+        description: string;
+        current_value: number | string;
+        required_value: number | string;
+    };
     requirements?: LocationRequirement[];
     objects?: LocationObject[];
     access_issue?: string;
+    is_discovered?: boolean;
+    _characterId?: number;
 }
 
 export interface LocationConnection {
@@ -66,6 +83,19 @@ class LocationStore {
     async loadAvailableLocations(
         characterId: number
     ): Promise<LocationsLoadResult | null> {
+        // Если данные уже загружены и не меняются, просто возвращаем их
+        if (
+            !this.isLoading &&
+            this.availableLocations.length > 0 &&
+            this.currentLocation &&
+            this.currentLocation._characterId === characterId
+        ) {
+            return {
+                availableLocations: this.availableLocations,
+                currentLocation: this.currentLocation,
+            };
+        }
+
         this.isLoading = true;
         this.error = null;
 
@@ -92,6 +122,11 @@ class LocationStore {
 
             const locations = response.data.locations;
             const currentLocation = response.data.current_location;
+
+            // Добавляем ID персонажа к текущей локации для кэширования
+            if (currentLocation) {
+                currentLocation._characterId = characterId;
+            }
 
             runInAction(() => {
                 this.availableLocations = locations;

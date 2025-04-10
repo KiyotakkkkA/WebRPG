@@ -7,9 +7,11 @@ use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Admin\AdminLocationController;
+use App\Http\Controllers\RegionController;
 use App\Http\Controllers\SupportMessageController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\MapController;
 
 // Маршрут для обновления CSRF-токена
 Route::get('/refresh-csrf', function () {
@@ -72,6 +74,13 @@ Route::middleware(['web', 'auth:sanctum', 'role:admin'])->prefix('admin')->group
     Route::get('/users', [AdminController::class, 'getAllUsers']);
     Route::put('/users/{userId}/role', [AdminController::class, 'updateUserRole']);
 
+    // Управление регионами
+    Route::get('/regions', [RegionController::class, 'index']);
+    Route::post('/regions', [RegionController::class, 'store']);
+    Route::get('/regions/{region}', [RegionController::class, 'show']);
+    Route::put('/regions/{region}', [RegionController::class, 'update']);
+    Route::delete('/regions/{region}', [RegionController::class, 'destroy']);
+
     // Управление локациями
     Route::get('/locations', [AdminLocationController::class, 'index']);
     Route::post('/locations', [AdminLocationController::class, 'store']);
@@ -91,3 +100,7 @@ Route::middleware(['web', 'auth:sanctum', 'role:admin'])->prefix('admin')->group
     Route::put('/location-requirements/{requirement}', [AdminLocationController::class, 'updateRequirement']);
     Route::delete('/location-requirements/{requirement}', [AdminLocationController::class, 'deleteRequirement']);
 });
+
+// Маршруты для карты
+Route::get('/world-map', [MapController::class, 'getWorldMap']);
+Route::get('/region-map/{regionId}', [MapController::class, 'getRegionMap']);

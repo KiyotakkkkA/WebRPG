@@ -4,6 +4,7 @@ import axios from "axios";
 import AdminLayout from "./AdminLayout";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "react-router-dom";
+import { toast } from "react-toastify";
 
 // Определение типов для локаций
 interface Location {
@@ -16,6 +17,32 @@ interface Location {
     is_discoverable: boolean;
     position_x: number;
     position_y: number;
+    region_id?: number | null;
+    region?: Region;
+}
+
+// Интерфейс для региона
+interface Region {
+    id: number;
+    name: string;
+    code: string;
+    description: string | null;
+    is_accessible: boolean;
+    display_order: number;
+    icon: string | null;
+}
+
+// Интерфейс для формы создания/редактирования локации
+interface LocationFormData {
+    name: string;
+    description: string;
+    danger_level: number;
+    is_default: boolean;
+    is_discoverable: boolean;
+    position_x: number;
+    position_y: number;
+    region_id?: number | null;
+    image?: File | null;
 }
 
 // Вспомогательная функция для формирования правильного URL изображения
@@ -42,52 +69,75 @@ const fetchLocationsAPI = async () => {
     return response.data;
 };
 
-const createLocationAPI = async (formData: FormData) => {
-    // Добавим CSRF-токен из meta-тега
-    const token = document
-        .querySelector('meta[name="csrf-token"]')
-        ?.getAttribute("content");
+// Функция создания локации
+const createLocationAPI = async (
+    formData: LocationFormData
+): Promise<Location> => {
+    const formDataObj = new FormData();
+    formDataObj.append("name", formData.name);
+    formDataObj.append("description", formData.description);
+    formDataObj.append("danger_level", formData.danger_level.toString());
+    formDataObj.append("is_default", formData.is_default.toString());
+    formDataObj.append("is_discoverable", formData.is_discoverable.toString());
+    formDataObj.append("position_x", formData.position_x.toString());
+    formDataObj.append("position_y", formData.position_y.toString());
+    if (formData.region_id) {
+        formDataObj.append("region_id", formData.region_id.toString());
+    }
+    if (formData.image) {
+        formDataObj.append("image", formData.image);
+    }
 
-    // Настраиваем заголовки запроса
-    const config = {
-        headers: {
-            "Content-Type": "multipart/form-data",
-            "X-CSRF-TOKEN": token || "",
-            Accept: "application/json",
-        },
-    };
-
-    const response = await axios.post("/api/admin/locations", formData, config);
-    return response.data;
+    try {
+        const response = await axios.post("/api/admin/locations", formDataObj, {
+            headers: {
+                "Content-Type": "multipart/form-data",
+            },
+        });
+        return response.data.location;
+    } catch (error) {
+        console.error("Error creating location:", error);
+        throw error;
+    }
 };
 
-const updateLocationAPI = async ({
-    id,
-    formData,
-}: {
+// Функция обновления локации
+const updateLocationAPI = async (params: {
     id: number;
-    formData: FormData;
-}) => {
-    // Добавим CSRF-токен из meta-тега
-    const token = document
-        .querySelector('meta[name="csrf-token"]')
-        ?.getAttribute("content");
+    formData: LocationFormData;
+}): Promise<Location> => {
+    const { id, formData } = params;
+    const formDataObj = new FormData();
+    formDataObj.append("_method", "PUT");
+    formDataObj.append("name", formData.name);
+    formDataObj.append("description", formData.description);
+    formDataObj.append("danger_level", formData.danger_level.toString());
+    formDataObj.append("is_default", formData.is_default.toString());
+    formDataObj.append("is_discoverable", formData.is_discoverable.toString());
+    formDataObj.append("position_x", formData.position_x.toString());
+    formDataObj.append("position_y", formData.position_y.toString());
+    if (formData.region_id) {
+        formDataObj.append("region_id", formData.region_id.toString());
+    }
+    if (formData.image) {
+        formDataObj.append("image", formData.image);
+    }
 
-    // Настраиваем заголовки запроса
-    const config = {
-        headers: {
-            "Content-Type": "multipart/form-data",
-            "X-CSRF-TOKEN": token || "",
-            Accept: "application/json",
-        },
-    };
-
-    const response = await axios.post(
-        `/api/admin/locations/${id}?_method=PUT`,
-        formData,
-        config
-    );
-    return response.data;
+    try {
+        const response = await axios.post(
+            `/api/admin/locations/${id}`,
+            formDataObj,
+            {
+                headers: {
+                    "Content-Type": "multipart/form-data",
+                },
+            }
+        );
+        return response.data.location;
+    } catch (error) {
+        console.error("Error updating location:", error);
+        throw error;
+    }
 };
 
 const deleteLocationAPI = async (id: number) => {
@@ -114,6 +164,8 @@ const AdminLocations: React.FC = observer(() => {
         null
     );
     const [error, setError] = useState<string | null>(null);
+    const [regions, setRegions] = useState<Region[]>([]);
+    const [loading, setLoading] = useState(true);
 
     // Используем React Query для загрузки локаций
     const {
@@ -241,27 +293,28 @@ const AdminLocations: React.FC = observer(() => {
         setShowForm(true);
     };
 
-    // Обработка сохранения локации
-    const handleSaveLocation = async (formData: FormData) => {
-        try {
-            if (editingLocation) {
-                updateLocationMutation.mutate({
-                    id: editingLocation.id,
-                    formData,
-                });
-            } else {
-                createLocationMutation.mutate(formData);
-            }
-        } catch (err: any) {
-            console.error("Ошибка при сохранении локации:", err);
-        }
-    };
-
     // Обработка удаления локации
     const handleDeleteLocation = async () => {
         if (!locationToDelete) return;
         deleteLocationMutation.mutate(locationToDelete);
     };
+
+    // Функция для загрузки регионов
+    const fetchRegionsAPI = async () => {
+        try {
+            const response = await axios.get("/api/admin/regions");
+            setRegions(response.data);
+        } catch (error) {
+            console.error("Ошибка при загрузке регионов:", error);
+            toast.error("Не удалось загрузить список регионов");
+        }
+    };
+
+    // Загрузка локаций при монтировании компонента
+    useEffect(() => {
+        // Загрузка регионов при первом рендере
+        fetchRegionsAPI();
+    }, []);
 
     // Компонент формы создания/редактирования локации
     const LocationForm = () => {
@@ -286,7 +339,47 @@ const AdminLocations: React.FC = observer(() => {
         const [positionY, setPositionY] = useState(
             editingLocation?.position_y || 0
         );
+        const [regionId, setRegionId] = useState<number | null>(
+            editingLocation?.region_id || null
+        );
         const [imageFile, setImageFile] = useState<File | null>(null);
+        const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+        useEffect(() => {
+            // Если редактируем локацию, заполняем форму её данными
+            if (editingLocation) {
+                setName(editingLocation.name);
+                setDescription(editingLocation.description);
+                setDangerLevel(editingLocation.danger_level);
+                setIsDefault(editingLocation.is_default);
+                setIsDiscoverable(editingLocation.is_discoverable);
+                setPositionX(editingLocation.position_x);
+                setPositionY(editingLocation.position_y);
+                setRegionId(editingLocation.region_id || null);
+                setPreviewUrl(
+                    editingLocation.image_url
+                        ? getImageUrl(editingLocation.image_url)
+                        : null
+                );
+            } else {
+                // Если создаём новую локацию, сбрасываем форму
+                resetForm();
+            }
+        }, [editingLocation]);
+
+        const resetForm = () => {
+            setName("");
+            setDescription("");
+            setDangerLevel(1);
+            setIsDefault(false);
+            setIsDiscoverable(true);
+            setPositionX(0);
+            setPositionY(0);
+            setRegionId(null);
+            setImageFile(null);
+            setPreviewUrl(null);
+            setError("");
+        };
 
         const handleSubmit = (e: React.FormEvent) => {
             e.preventDefault();
@@ -315,6 +408,11 @@ const AdminLocations: React.FC = observer(() => {
             formData.append("is_discoverable", isDiscoverable.toString());
             formData.append("position_x", positionX.toString());
             formData.append("position_y", positionY.toString());
+
+            // Добавляем регион, если он выбран
+            if (regionId !== null) {
+                formData.append("region_id", regionId.toString());
+            }
 
             // Проверка для изображения
             if (imageFile) {
@@ -352,7 +450,27 @@ const AdminLocations: React.FC = observer(() => {
                 }
             }
 
-            handleSaveLocation(formData);
+            // Создаем объект LocationFormData
+            const locationFormData: LocationFormData = {
+                name: name.trim(),
+                description: description.trim(),
+                danger_level: dangerLevel,
+                is_default: isDefault,
+                is_discoverable: isDiscoverable,
+                position_x: positionX,
+                position_y: positionY,
+                region_id: regionId,
+                image: imageFile,
+            };
+
+            if (editingLocation) {
+                updateLocationMutation.mutate({
+                    id: editingLocation.id,
+                    formData: locationFormData,
+                });
+            } else {
+                createLocationMutation.mutate(locationFormData);
+            }
         };
 
         const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -454,6 +572,43 @@ const AdminLocations: React.FC = observer(() => {
                                 className="w-full px-3 py-2 bg-gray-900 text-gray-300 border border-red-900/40 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-700/50 focus:border-red-700/50"
                                 required
                             />
+                        </div>
+
+                        <div>
+                            <label
+                                htmlFor="regionId"
+                                className="block text-gray-300 font-medieval mb-2"
+                            >
+                                РЕГИОН
+                            </label>
+                            <select
+                                id="regionId"
+                                value={regionId || ""}
+                                onChange={(e) =>
+                                    setRegionId(
+                                        e.target.value
+                                            ? parseInt(e.target.value)
+                                            : null
+                                    )
+                                }
+                                className="w-full px-3 py-2 bg-gray-900 text-gray-300 border border-red-900/40 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-red-700/50 focus:border-red-700/50"
+                            >
+                                <option value="">Не выбран</option>
+                                {regions
+                                    .sort(
+                                        (a, b) =>
+                                            a.display_order - b.display_order ||
+                                            a.name.localeCompare(b.name)
+                                    )
+                                    .map((region) => (
+                                        <option
+                                            key={region.id}
+                                            value={region.id}
+                                        >
+                                            {region.name}
+                                        </option>
+                                    ))}
+                            </select>
                         </div>
                     </div>
 
@@ -690,210 +845,218 @@ const AdminLocations: React.FC = observer(() => {
 
     return (
         <AdminLayout pageTitle="Управление локациями">
-            <div className="mb-6 flex justify-between items-center">
+            <div className="p-4">
                 <button
                     onClick={handleAddLocation}
-                    className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-md flex items-center"
+                    className="bg-red-700 hover:bg-red-800 text-white py-2 px-4 rounded mb-4"
                 >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5 mr-2"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                    >
-                        <path
-                            fillRule="evenodd"
-                            d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z"
-                            clipRule="evenodd"
-                        />
-                    </svg>
-                    Добавить локацию
+                    + ДОБАВИТЬ ЛОКАЦИЮ
                 </button>
-            </div>
 
-            {/* Сообщения */}
-            {successMessage && (
-                <div className="mb-4 p-4 bg-green-900/20 border border-green-900/40 text-green-400 rounded-md">
-                    {successMessage}
-                </div>
-            )}
-
-            {error && (
-                <div className="mb-4 p-4 bg-red-900/20 border border-red-900/40 text-red-400 rounded-md">
-                    {error}
-                </div>
-            )}
-
-            {/* Форма */}
-            {showForm && <LocationForm />}
-
-            {/* Таблица локаций */}
-            <div className="bg-gray-800 rounded-lg border border-red-900/30 shadow-md overflow-hidden">
-                {isLoading && locations.length === 0 ? (
-                    <div className="flex justify-center items-center h-40">
-                        <div className="h-8 w-8 animate-spin rounded-full border-t-4 border-red-600"></div>
-                        <span className="ml-2 text-gray-400">Загрузка...</span>
+                {/* Сообщения */}
+                {successMessage && (
+                    <div className="mb-4 p-4 bg-green-900/20 border border-green-900/40 text-green-400 rounded-md">
+                        {successMessage}
                     </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-700">
-                            <thead className="bg-gray-900">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
-                                        Локация
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
-                                        Опасность
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
-                                        Статус
-                                    </th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
-                                        Координаты
-                                    </th>
-                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">
-                                        Действия
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-gray-800 divide-y divide-gray-700">
-                                {locations.length === 0 ? (
+                )}
+
+                {error && (
+                    <div className="mb-4 p-4 bg-red-900/20 border border-red-900/40 text-red-400 rounded-md">
+                        {error}
+                    </div>
+                )}
+
+                {/* Форма */}
+                {showForm && <LocationForm />}
+
+                {/* Таблица локаций */}
+                <div className="bg-gray-800 rounded-lg border border-red-900/30 shadow-md overflow-hidden">
+                    {isLoading && locations.length === 0 ? (
+                        <div className="flex justify-center items-center h-40">
+                            <div className="h-8 w-8 animate-spin rounded-full border-t-4 border-red-600"></div>
+                            <span className="ml-2 text-gray-400">
+                                Загрузка...
+                            </span>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-700">
+                                <thead className="bg-gray-900">
                                     <tr>
-                                        <td
-                                            colSpan={5}
-                                            className="px-4 py-4 text-center text-gray-400"
-                                        >
-                                            Локации не найдены. Создайте первую
-                                            локацию!
-                                        </td>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+                                            Локация
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+                                            Регион
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+                                            Опасность
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+                                            Статус
+                                        </th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">
+                                            Координаты
+                                        </th>
+                                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">
+                                            Действия
+                                        </th>
                                     </tr>
-                                ) : (
-                                    locations.map((location: Location) => (
-                                        <tr
-                                            key={location.id}
-                                            className="hover:bg-gray-750"
-                                        >
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center">
-                                                    <img
-                                                        src={getImageUrl(
-                                                            location.image_url ||
-                                                                "/images/locations/default.jpg"
-                                                        )}
-                                                        alt={location.name}
-                                                        className="w-12 h-8 object-cover rounded mr-3"
-                                                    />
-                                                    <div>
-                                                        <div className="font-medium text-gray-300">
-                                                            {location.name}
-                                                        </div>
-                                                        <div className="text-xs text-gray-500 line-clamp-1 max-w-xs">
-                                                            {
-                                                                location.description
-                                                            }
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span
-                                                    className={`
-                                                    inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                                                    ${
-                                                        location.danger_level <=
-                                                        3
-                                                            ? "bg-green-900/20 text-green-400"
-                                                            : location.danger_level <=
-                                                              6
-                                                            ? "bg-yellow-900/20 text-yellow-400"
-                                                            : "bg-red-900/20 text-red-400"
-                                                    }
-                                                `}
-                                                >
-                                                    {location.danger_level} / 10
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex flex-col space-y-1">
-                                                    {location.is_default && (
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-900/20 text-blue-400">
-                                                            Стартовая
-                                                        </span>
-                                                    )}
-                                                    {location.is_discoverable && (
-                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-900/20 text-purple-400">
-                                                            Обнаруживаемая
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3 text-sm text-gray-400">
-                                                X: {location.position_x}, Y:{" "}
-                                                {location.position_y}
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-sm font-medium">
-                                                <button
-                                                    onClick={() =>
-                                                        handleEditLocation(
-                                                            location
-                                                        )
-                                                    }
-                                                    className="text-indigo-400 hover:text-indigo-300 mr-3"
-                                                >
-                                                    Редактировать
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        setLocationToDelete(
-                                                            location.id
-                                                        );
-                                                        setShowDeleteModal(
-                                                            true
-                                                        );
-                                                    }}
-                                                    className="text-red-400 hover:text-red-300"
-                                                >
-                                                    Удалить
-                                                </button>
+                                </thead>
+                                <tbody className="bg-gray-800 divide-y divide-gray-700">
+                                    {locations.length === 0 ? (
+                                        <tr>
+                                            <td
+                                                colSpan={6}
+                                                className="px-4 py-4 text-center text-gray-400"
+                                            >
+                                                Локации не найдены. Создайте
+                                                первую локацию!
                                             </td>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                                    ) : (
+                                        locations.map((location: Location) => (
+                                            <tr
+                                                key={location.id}
+                                                className="hover:bg-gray-750"
+                                            >
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center">
+                                                        <img
+                                                            src={getImageUrl(
+                                                                location.image_url ||
+                                                                    "/images/locations/default.jpg"
+                                                            )}
+                                                            alt={location.name}
+                                                            className="w-12 h-8 object-cover rounded mr-3"
+                                                        />
+                                                        <div>
+                                                            <div className="font-medium text-gray-300">
+                                                                {location.name}
+                                                            </div>
+                                                            <div className="text-xs text-gray-500 line-clamp-1 max-w-xs">
+                                                                {
+                                                                    location.description
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    {location.region ? (
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-700 text-gray-300">
+                                                            {
+                                                                location.region
+                                                                    .name
+                                                            }
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-500 text-xs">
+                                                            Не задан
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span
+                                                        className={`
+                                                        inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                                        ${
+                                                            location.danger_level <=
+                                                            3
+                                                                ? "bg-green-900/20 text-green-400"
+                                                                : location.danger_level <=
+                                                                  6
+                                                                ? "bg-yellow-900/20 text-yellow-400"
+                                                                : "bg-red-900/20 text-red-400"
+                                                        }
+                                                    `}
+                                                    >
+                                                        {location.danger_level}{" "}
+                                                        / 10
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex flex-col space-y-1">
+                                                        {location.is_default && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-900/20 text-blue-400">
+                                                                Стартовая
+                                                            </span>
+                                                        )}
+                                                        {location.is_discoverable && (
+                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-900/20 text-purple-400">
+                                                                Обнаруживаемая
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-sm text-gray-400">
+                                                    X: {location.position_x}, Y:{" "}
+                                                    {location.position_y}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-sm font-medium">
+                                                    <button
+                                                        onClick={() =>
+                                                            handleEditLocation(
+                                                                location
+                                                            )
+                                                        }
+                                                        className="text-indigo-400 hover:text-indigo-300 mr-3"
+                                                    >
+                                                        Редактировать
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setLocationToDelete(
+                                                                location.id
+                                                            );
+                                                            setShowDeleteModal(
+                                                                true
+                                                            );
+                                                        }}
+                                                        className="text-red-400 hover:text-red-300"
+                                                    >
+                                                        Удалить
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+
+                {/* Модальное окно подтверждения удаления */}
+                {showDeleteModal && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                        <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-red-900/30">
+                            <h3 className="text-lg font-medieval text-red-400 mb-4">
+                                Подтверждение удаления
+                            </h3>
+                            <p className="text-gray-300 mb-6">
+                                Вы уверены, что хотите удалить эту локацию? Это
+                                действие нельзя отменить.
+                            </p>
+                            <div className="flex justify-end space-x-2">
+                                <button
+                                    onClick={() => setShowDeleteModal(false)}
+                                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md"
+                                >
+                                    Отмена
+                                </button>
+                                <button
+                                    onClick={handleDeleteLocation}
+                                    className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-md"
+                                    disabled={isMutating}
+                                >
+                                    {isMutating ? "Удаление..." : "Удалить"}
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
-
-            {/* Модальное окно подтверждения удаления */}
-            {showDeleteModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4 border border-red-900/30">
-                        <h3 className="text-lg font-medieval text-red-400 mb-4">
-                            Подтверждение удаления
-                        </h3>
-                        <p className="text-gray-300 mb-6">
-                            Вы уверены, что хотите удалить эту локацию? Это
-                            действие нельзя отменить.
-                        </p>
-                        <div className="flex justify-end space-x-2">
-                            <button
-                                onClick={() => setShowDeleteModal(false)}
-                                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-md"
-                            >
-                                Отмена
-                            </button>
-                            <button
-                                onClick={handleDeleteLocation}
-                                className="px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded-md"
-                                disabled={isMutating}
-                            >
-                                {isMutating ? "Удаление..." : "Удалить"}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </AdminLayout>
     );
 });

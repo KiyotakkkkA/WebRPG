@@ -20,11 +20,19 @@ import {
 } from "../../Components/ui/GameIcons";
 import NpcInteractionModal from "../../Components/game/NpcInteractionModal";
 import CombatModal from "../../Components/game/CombatModal";
-import LocationMap from "../../Components/game/LocationMap";
 import { Dialog, Transition } from "@headlessui/react";
 import { runInAction } from "mobx";
 import TravelModal from "../../Components/game/TravelModal";
 import axios from "axios";
+import GameHeader from "../../Layouts/GameHeader";
+// Импортируем React Query
+import {
+    useQuery,
+    useMutation,
+    QueryClient,
+    QueryClientProvider,
+    UseMutationResult,
+} from "@tanstack/react-query";
 
 // Интерфейс для врага
 interface Enemy {
@@ -44,32 +52,6 @@ interface Enemy {
         chance: number;
     }[];
 }
-
-// Компонент ресурсной полосы (здоровье, мана, выносливость)
-const ResourceBar: React.FC<{
-    current: number;
-    max: number;
-    color: string;
-    label: string;
-    className?: string;
-}> = ({ current, max, color, label, className = "" }) => {
-    const percentage = Math.floor((current / max) * 100);
-
-    return (
-        <div className={`flex items-center space-x-2 ${className}`}>
-            <span className="text-xs text-gray-400 w-10">{label}:</span>
-            <div className="flex-1 bg-gray-800 h-4 rounded-sm border border-gray-700 overflow-hidden">
-                <div
-                    className={`h-full rounded-sm ${color}`}
-                    style={{ width: `${percentage}%` }}
-                ></div>
-            </div>
-            <span className="text-xs text-gray-300 w-16 text-right">
-                {current}/{max}
-            </span>
-        </div>
-    );
-};
 
 // Компонент для отображения игрового объекта
 const GameObjectItem: React.FC<{
@@ -304,6 +286,11 @@ const LocationItem: React.FC<{
                     <span className="text-xs text-red-500 ml-auto">⚠</span>
                 )}
             </div>
+            {location.region && (
+                <div className="text-xs text-gray-500 mt-1">
+                    <span className="opacity-70">{location.region.name}</span>
+                </div>
+            )}
         </div>
     );
 };
@@ -448,7 +435,9 @@ const TutorialModal: React.FC<{
                                         src={step.image}
                                         alt={step.title}
                                         className="w-full h-64 object-cover rounded-md border border-gray-700"
-                                        onError={(e) => {
+                                        onError={(
+                                            e: React.SyntheticEvent<HTMLImageElement>
+                                        ) => {
                                             (e.target as HTMLImageElement).src =
                                                 "/images/fallback-location.jpg";
                                         }}
@@ -504,6 +493,45 @@ const TutorialModal: React.FC<{
                 </div>
             </div>
         </div>
+    );
+};
+
+// Добавим иконку для карты
+const WorldMapIcon = ({ size = 24, className = "" }) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className={className}
+    >
+        <path d="M3 6l6-3l6 3l6-3v15l-6 3l-6-3l-6 3V6z" />
+        <path d="M9 3v15" />
+        <path d="M15 6v15" />
+    </svg>
+);
+
+// Создаем клиент запросов для React Query
+const queryClient = new QueryClient({
+    defaultOptions: {
+        queries: {
+            refetchOnWindowFocus: false,
+            retry: false,
+        },
+    },
+});
+
+// Оборачиваем компонент в QueryClientProvider
+const GameInterfaceWithQueryProvider = () => {
+    return (
+        <QueryClientProvider client={queryClient}>
+            <GameInterface />
+        </QueryClientProvider>
     );
 };
 
@@ -644,187 +672,257 @@ const GameInterface: React.FC = observer(() => {
         ],
     };
 
+    // useQuery для загрузки персонажей
+    const {
+        data: charactersData,
+        isLoading: charactersLoading,
+        error: charactersError,
+    } = useQuery({
+        queryKey: ["characters"],
+        queryFn: () => characterStore.loadCharacters(),
+        enabled: !characterStore.selectedCharacter, // Запрос активен только если нет выбранного персонажа
+    });
+
+    // useQuery для загрузки локаций, активно только при наличии выбранного персонажа
+    const {
+        data: locationsData,
+        isLoading: locationsLoading,
+        error: locationsError,
+    } = useQuery({
+        queryKey: ["availableLocations", characterStore.selectedCharacter?.id],
+        queryFn: () =>
+            locationStore.loadAvailableLocations(
+                characterStore.selectedCharacter!.id
+            ),
+        enabled: !!characterStore.selectedCharacter,
+    });
+
+    // useQuery для загрузки соединений между локациями
+    const {
+        data: connectionsData,
+        isLoading: connectionsLoading,
+        error: connectionsError,
+    } = useQuery({
+        queryKey: ["locationConnections"],
+        queryFn: () => locationStore.loadLocationConnections(),
+        enabled: !!characterStore.selectedCharacter,
+    });
+
+    // useMutation для перемещения к локации
+    const { mutate: moveToLocation } = useMutation({
+        mutationFn: ({
+            characterId,
+            locationId,
+        }: {
+            characterId: number;
+            locationId: number;
+        }) => locationStore.moveToLocation(characterId, locationId),
+        onSuccess: (result) => {
+            if (result.success) {
+                // Добавляем запись о перемещении в журнал
+                journalStore.addEntry(
+                    `Вы прибыли в локацию ${selectedTargetLocation?.name}`,
+                    "location"
+                );
+                setActiveLocation(result.location as Location | null);
+
+                // Инвалидация запросов после перемещения
+                queryClient.invalidateQueries({
+                    queryKey: ["availableLocations"],
+                });
+                queryClient.invalidateQueries({
+                    queryKey: ["locationConnections"],
+                });
+
+                // Инвалидация данных персонажа
+                if (characterStore.selectedCharacter) {
+                    queryClient.invalidateQueries({
+                        queryKey: [
+                            "character",
+                            characterStore.selectedCharacter.id,
+                        ],
+                    });
+                }
+            } else {
+                console.error(
+                    `Ошибка при перемещении в локацию: ${result.error}`,
+                    result.debug
+                );
+
+                // Добавляем запись об ошибке
+                journalStore.addEntry(
+                    `Не удалось переместиться в локацию ${selectedTargetLocation?.name}: ${result.error}`,
+                    "error"
+                );
+
+                setError(
+                    result.error ||
+                        "Не удалось переместиться в выбранную локацию"
+                );
+            }
+
+            setSelectedTargetLocation(null);
+            setIsTravelModalOpen(false);
+            setLoading(false);
+        },
+        onError: (err) => {
+            console.error("Исключение при перемещении в локацию:", err);
+            journalStore.addEntry(
+                `Произошла ошибка при перемещении в локацию`,
+                "error"
+            );
+            setError("Ошибка при перемещении в локацию");
+
+            setSelectedTargetLocation(null);
+            setIsTravelModalOpen(false);
+            setLoading(false);
+        },
+    });
+
+    // useMutation для завершения туториала
+    const { mutate: completeTutorial } = useMutation({
+        mutationFn: ({ characterId }: { characterId: number }) =>
+            axios.post("/api/characters/tutorial-completed", {
+                character_id: characterId,
+            }),
+        onSettled: () => {
+            setShowTutorial(false);
+            // После закрытия туториала обновляем информацию о персонаже
+            if (characterStore.selectedCharacter) {
+                queryClient.invalidateQueries({
+                    queryKey: [
+                        "character",
+                        characterStore.selectedCharacter.id,
+                    ],
+                });
+            }
+        },
+    });
+
+    // useQuery для получения деталей локации для предзагрузки
+    const getLocationDetailsQuery = (locationId: number, characterId: number) =>
+        useQuery({
+            queryKey: ["locationDetails", locationId, characterId],
+            queryFn: () =>
+                locationStore.getLocationDetails(locationId, characterId),
+            enabled: false, // Запрос не активен по умолчанию, вызываем вручную
+        });
+
     // Загружаем персонажа игрока и доступные локации
     useEffect(() => {
-        const loadGame = async () => {
-            setLoading(true);
-            setError(null);
+        setLoading(true);
+        setError(null);
 
+        journalStore.addEntry("Начинаем загрузку игрового мира...", "system");
+
+        if (!characterStore.selectedCharacter) {
+            if (charactersData && characterStore.characters.length > 0) {
+                // Если есть активный персонаж, выбираем его
+                const activeCharacter = characterStore.characters.find(
+                    (char) => char.is_active
+                );
+                if (activeCharacter) {
+                    characterStore.selectCharacter(activeCharacter);
+                } else {
+                    // Иначе выбираем первого персонажа
+                    characterStore.selectCharacter(
+                        characterStore.characters[0]
+                    );
+                }
+            } else if (charactersError) {
+                journalStore.addEntry("Ошибка при загрузке персонажа", "error");
+                setError("Ошибка при загрузке персонажа");
+                setLoading(false);
+            } else if (
+                !charactersLoading &&
+                characterStore.characters.length === 0
+            ) {
+                journalStore.addEntry(
+                    "У вас нет персонажей. Создайте персонажа, чтобы начать игру."
+                );
+                setLoading(false);
+            }
+        }
+
+        // Обработка данных локаций
+        if (locationsData && characterStore.selectedCharacter) {
+            if (
+                locationsData.availableLocations &&
+                locationsData.availableLocations.length > 0
+            ) {
+                setActiveLocation(
+                    locationsData.currentLocation as Location | null
+                );
+
+                // Если нет текущей локации, но есть доступные, выбираем первую
+                if (
+                    !locationsData.currentLocation &&
+                    locationStore.availableLocations.length > 0
+                ) {
+                    setActiveLocation(locationStore.availableLocations[0]);
+                }
+
+                // Добавляем запись в журнал о текущей локации
+                if (locationsData.currentLocation) {
+                    journalStore.addEntry(
+                        `Вы находитесь в локации ${locationsData.currentLocation.name}`,
+                        "location"
+                    );
+                }
+            } else {
+                console.warn("Сервер вернул пустой массив локаций");
+                journalStore.addEntry(
+                    "Не удалось загрузить доступные локации",
+                    "error"
+                );
+            }
+        } else if (locationsError) {
+            console.error("Ошибка при загрузке локаций:", locationsError);
+            setError("Ошибка при загрузке локаций");
+        }
+
+        // Обработка данных соединений
+        if (connectionsData && connectionsData.length > 0) {
+            setLocationConnections(connectionsData);
+        } else if (connectionsError) {
+            console.error("Ошибка при загрузке соединений:", connectionsError);
             journalStore.addEntry(
-                "Начинаем загрузку игрового мира...",
+                "Ошибка при загрузке соединений между локациями",
+                "error"
+            );
+        }
+
+        // Проверка для новых персонажей
+        if (characterStore.selectedCharacter?.is_new) {
+            journalStore.addEntry(
+                `Добро пожаловать в мир Эхо Забвения, ${characterStore.selectedCharacter.name}! Это ваше первое приключение.`,
                 "system"
             );
 
-            try {
-                // Шаг 1: Загружаем выбранного персонажа
-                if (!characterStore.selectedCharacter) {
-                    try {
-                        await characterStore.loadCharacters();
-                        if (
-                            characterStore.characters &&
-                            characterStore.characters.length > 0
-                        ) {
-                            // Если есть активный персонаж, выбираем его
-                            const activeCharacter =
-                                characterStore.characters.find(
-                                    (char) => char.is_active
-                                );
-                            if (activeCharacter) {
-                                characterStore.selectCharacter(activeCharacter);
-                            } else {
-                                // Иначе выбираем первого персонажа
-                                characterStore.selectCharacter(
-                                    characterStore.characters[0]
-                                );
-                            }
-                        } else {
-                            journalStore.addEntry(
-                                "У вас нет персонажей. Создайте персонажа, чтобы начать игру."
-                            );
-                            setLoading(false);
-                            return;
-                        }
-                    } catch (err) {
-                        journalStore.addEntry(
-                            "Ошибка при загрузке персонажа",
-                            "error"
-                        );
-                        setError("Ошибка при загрузке персонажа");
-                        setLoading(false);
-                        return;
-                    }
-                }
+            // Показываем обучающее модальное окно
+            setShowTutorial(true);
 
-                // Проверка для новых персонажей
-                if (characterStore.selectedCharacter?.is_new) {
-                    journalStore.addEntry(
-                        `Добро пожаловать в мир Эхо Забвения, ${characterStore.selectedCharacter.name}! Это ваше первое приключение.`,
-                        "system"
-                    );
+            journalStore.addEntry(
+                "Ваше путешествие только начинается. Исследуйте мир, выполняйте задания и остерегайтесь опасностей.",
+                "system"
+            );
+        }
 
-                    // Показываем обучающее модальное окно
-                    setShowTutorial(true);
-
-                    // Дополнительные действия для новых персонажей
-                    // Например, добавление стартовых предметов, установка начальной локации и т.д.
-                    journalStore.addEntry(
-                        "Ваше путешествие только начинается. Исследуйте мир, выполняйте задания и остерегайтесь опасностей.",
-                        "system"
-                    );
-
-                    // Можно вызвать специальный метод API для инициализации нового персонажа
-                    try {
-                        // TODO: Вызов API для инициализации нового персонажа, если необходимо
-                        // await axios.post("/api/characters/initialize", {
-                        //     character_id: characterStore.selectedCharacter.id
-                        // });
-                        // После успешной инициализации сбрасываем флаг is_new
-                        // Это будет реализовано в контроллере переходов между локациями
-                    } catch (error) {
-                        console.error(
-                            "Ошибка при инициализации нового персонажа:",
-                            error
-                        );
-                    }
-                }
-
-                // Шаг 2: Загружаем доступные локации
-                if (characterStore.selectedCharacter) {
-                    try {
-                        const result =
-                            await locationStore.loadAvailableLocations(
-                                characterStore.selectedCharacter.id
-                            );
-
-                        if (result) {
-                            // Проверяем, что в ответе есть массив локаций
-                            if (
-                                result.availableLocations &&
-                                result.availableLocations.length > 0
-                            ) {
-                                // Логируем для отладки
-                                result.availableLocations.forEach(
-                                    (loc, index) => {}
-                                );
-
-                                // Используем явное приведение типа
-                                setActiveLocation(
-                                    result.currentLocation as Location | null
-                                );
-
-                                // Если нет текущей локации, но есть доступные, выбираем первую
-                                if (
-                                    !result.currentLocation &&
-                                    locationStore.availableLocations.length > 0
-                                ) {
-                                    setActiveLocation(
-                                        locationStore.availableLocations[0]
-                                    );
-                                }
-
-                                // Добавляем запись в журнал о текущей локации
-                                if (result.currentLocation) {
-                                    journalStore.addEntry(
-                                        `Вы находитесь в локации ${result.currentLocation.name}`,
-                                        "location"
-                                    );
-                                }
-                            } else {
-                                console.warn(
-                                    "Сервер вернул пустой массив локаций"
-                                );
-                                journalStore.addEntry(
-                                    "Не удалось загрузить доступные локации",
-                                    "error"
-                                );
-                            }
-
-                            // Шаг 3: Загружаем соединения между локациями
-                            try {
-                                const connections =
-                                    await locationStore.loadLocationConnections();
-
-                                if (connections && connections.length > 0) {
-                                    setLocationConnections(connections);
-                                } else {
-                                    console.error(
-                                        "Не удалось загрузить соединения или список пуст!"
-                                    );
-                                    journalStore.addEntry(
-                                        "Не удалось загрузить данные о соединениях между локациями",
-                                        "error"
-                                    );
-                                }
-                            } catch (error) {
-                                console.error(
-                                    "Ошибка при загрузке соединений:",
-                                    error
-                                );
-                                journalStore.addEntry(
-                                    "Ошибка при загрузке соединений между локациями",
-                                    "error"
-                                );
-                            }
-                        } else {
-                            setError(
-                                "Не удалось загрузить информацию о локациях"
-                            );
-                        }
-                    } catch (err) {
-                        console.error("Ошибка при загрузке локаций:", err);
-                        setError("Ошибка при загрузке локаций");
-                    }
-                }
-
-                setLoading(false);
-            } catch (err) {
-                console.error("Ошибка при загрузке игрового мира:", err);
-                setError("Ошибка при загрузке игрового мира");
-            }
-        };
-
-        loadGame();
-    }, []);
+        // Установка загрузки в false, когда все данные получены или произошла ошибка
+        if (!charactersLoading && !locationsLoading && !connectionsLoading) {
+            setLoading(false);
+        }
+    }, [
+        charactersData,
+        charactersLoading,
+        charactersError,
+        locationsData,
+        locationsLoading,
+        locationsError,
+        connectionsData,
+        connectionsLoading,
+        connectionsError,
+    ]);
 
     // Обработчик выбора локации
     const handleLocationSelect = async (location: Location) => {
@@ -874,48 +972,7 @@ const GameInterface: React.FC = observer(() => {
                     );
 
                     if (newConnection) {
-                        // Получаем скорость персонажа
-                        const characterSpeed =
-                            characterStore.selectedCharacter.speed || 10;
-
-                        // Базовое время перемещения из соединения
-                        let baseTravelTime = newConnection.travel_time;
-
-                        // Расчет времени с учетом скорости персонажа
-                        // Новая формула: max(3, time - time*(1 - speed/100))
-                        const speedModifier = characterSpeed / 100;
-                        let calculatedTime = Math.round(
-                            baseTravelTime -
-                                baseTravelTime * (1 - speedModifier)
-                        );
-
-                        // Минимальное время перемещения - 3 секунды
-                        const finalTravelTime = Math.max(3, calculatedTime);
-
-                        // Расчет сэкономленного времени
-                        const savedTime = baseTravelTime - finalTravelTime;
-
-                        setIsLocationPreloaded(false);
-                        setSelectedTargetLocation(location);
-                        setTravelTime(finalTravelTime);
-                        setBaseTravelTime(baseTravelTime);
-                        setSavedTime(savedTime);
-                        setIsTravelModalOpen(true);
-
-                        // Предзагружаем данные локации
-                        try {
-                            const response =
-                                await locationStore.getLocationDetails(
-                                    location.id,
-                                    characterStore.selectedCharacter.id
-                                );
-                            setIsLocationPreloaded(true);
-                        } catch (error) {
-                            console.error(
-                                "Ошибка при предзагрузке данных локации:",
-                                error
-                            );
-                        }
+                        handleTravelSetup(newConnection, location);
                         return;
                     }
                 }
@@ -944,8 +1001,16 @@ const GameInterface: React.FC = observer(() => {
             );
         }
 
+        handleTravelSetup(connection, location);
+    };
+
+    // Функция настройки путешествия
+    const handleTravelSetup = (
+        connection: LocationConnection | undefined,
+        location: Location
+    ) => {
         // Получаем скорость персонажа
-        const characterSpeed = characterStore.selectedCharacter.speed || 10;
+        const characterSpeed = characterStore.selectedCharacter!.speed || 10;
 
         // Базовое время перемещения из соединения или по умолчанию
         let baseTravelTime = connection ? connection.travel_time : 10;
@@ -971,15 +1036,31 @@ const GameInterface: React.FC = observer(() => {
         setSavedTime(savedTime);
         setIsTravelModalOpen(true);
 
-        // Предзагружаем данные локации
-        try {
-            const response = await locationStore.getLocationDetails(
-                location.id,
-                characterStore.selectedCharacter.id
-            );
-            setIsLocationPreloaded(true);
-        } catch (error) {
-            console.error("Ошибка при предзагрузке данных локации:", error);
+        // Предзагружаем данные локации с использованием React Query
+        if (characterStore.selectedCharacter) {
+            queryClient
+                .prefetchQuery({
+                    queryKey: [
+                        "locationDetails",
+                        location.id,
+                        characterStore.selectedCharacter.id,
+                    ],
+                    queryFn: () =>
+                        locationStore.getLocationDetails(
+                            location.id,
+                            characterStore.selectedCharacter!.id
+                        ),
+                    staleTime: 5 * 60 * 1000, // Кэшируем на 5 минут
+                })
+                .then(() => {
+                    setIsLocationPreloaded(true);
+                })
+                .catch((error: unknown) => {
+                    console.error(
+                        "Ошибка при предзагрузке данных локации:",
+                        error
+                    );
+                });
         }
     };
 
@@ -990,51 +1071,16 @@ const GameInterface: React.FC = observer(() => {
             return;
         }
 
-        try {
-            setLoading(true);
+        setLoading(true);
+        moveToLocation({
+            characterId: characterStore.selectedCharacter.id,
+            locationId: selectedTargetLocation.id,
+        });
 
-            const result = await locationStore.moveToLocation(
-                characterStore.selectedCharacter.id,
-                selectedTargetLocation.id
-            );
-
-            if (result.success) {
-                // Добавляем запись о перемещении в журнал
-                journalStore.addEntry(
-                    `Вы прибыли в локацию ${selectedTargetLocation.name}`,
-                    "location"
-                );
-
-                setActiveLocation(result.location as Location | null);
-            } else {
-                console.error(
-                    `Ошибка при перемещении в локацию: ${result.error}`,
-                    result.debug
-                );
-
-                // Добавляем запись об ошибке
-                journalStore.addEntry(
-                    `Не удалось переместиться в локацию ${selectedTargetLocation.name}: ${result.error}`,
-                    "error"
-                );
-
-                setError(
-                    result.error ||
-                        "Не удалось переместиться в выбранную локацию"
-                );
-            }
-        } catch (err) {
-            console.error("Исключение при перемещении в локацию:", err);
-            journalStore.addEntry(
-                `Произошла ошибка при перемещении в локацию`,
-                "error"
-            );
-            setError("Ошибка при перемещении в локацию");
-        } finally {
-            setSelectedTargetLocation(null);
-            setIsTravelModalOpen(false);
-            setLoading(false);
-        }
+        // Дополнительно инвалидируем данные персонажа
+        queryClient.invalidateQueries({
+            queryKey: ["character", characterStore.selectedCharacter.id],
+        });
     };
 
     // Функция для отмены путешествия
@@ -1043,39 +1089,21 @@ const GameInterface: React.FC = observer(() => {
         setIsTravelModalOpen(false);
     };
 
-    // Обработчик выбора объекта
-    const handleObjectSelect = (object: LocationObject) => {
-        if (object.type === "npc") {
-            journalStore.addEntry(`Вы встретили ${object.name}`, "location");
-            setSelectedNpc(object);
-            setIsNpcModalOpen(true);
-        } else if (object.type === "monster") {
-            // Запускаем бой при выборе монстра
-            if (activeLocation) {
-                const locationId = activeLocation.id.toString();
-                const enemies = locationEnemies[locationId];
-
-                if (enemies) {
-                    const enemy = enemies.find((e) => e.id === object.id);
-                    if (enemy) {
-                        journalStore.addEntry(
-                            `Вы вступили в бой с ${object.name}`,
-                            "combat"
-                        );
-                        setCurrentEnemy(enemy);
-                        setIsCombatModalOpen(true);
-                    }
-                }
-            }
-        } else {
-            journalStore.addEntry(`Вы исследуете ${object.name}`, "location");
-            // Здесь будет логика для других типов объектов
-        }
-    };
-
     // Функция для запуска исследования локации
     const handleExplore = () => {
         if (!activeLocation) return;
+
+        // Проверяем, достаточно ли выносливости
+        if (
+            characterStore.selectedCharacter &&
+            characterStore.selectedCharacter.stamina < 5
+        ) {
+            journalStore.addEntry(
+                "Вы слишком устали для исследования. Отдохните немного.",
+                "system"
+            );
+            return;
+        }
 
         // Добавляем запись о начале исследования
         journalStore.addEntry(
@@ -1120,17 +1148,8 @@ const GameInterface: React.FC = observer(() => {
             // Находим предмет
             handleFindRandomItem();
         } else if (roll < encounterChance + itemChance + resourceChance) {
-            // Находим ресурс
-            const resources = [
-                "Железная руда",
-                "Старая древесина",
-                "Лечебная трава",
-                "Кристаллический осколок",
-                "Таинственный гриб",
-                "Кожа животного",
-            ];
-            const randomResource =
-                resources[Math.floor(Math.random() * resources.length)];
+            // Находим ресурс с помощью CharacterStore
+            const randomResource = characterStore.getRandomResource();
             journalStore.addEntry(
                 `Вы обнаружили ресурс: ${randomResource}`,
                 "item"
@@ -1164,21 +1183,22 @@ const GameInterface: React.FC = observer(() => {
                 messages[Math.floor(Math.random() * messages.length)];
             journalStore.addEntry(randomMessage, "system");
         }
+
+        // Расходуем выносливость при исследовании
+        characterStore.useResource("stamina", 5);
+
+        // Инвалидируем данные персонажа после изменения состояния
+        if (characterStore.selectedCharacter) {
+            queryClient.invalidateQueries({
+                queryKey: ["character", characterStore.selectedCharacter.id],
+            });
+        }
     };
 
     // Функция для генерации случайной находки
     const handleFindRandomItem = () => {
-        const items = [
-            "Малое зелье здоровья",
-            "Малое зелье маны",
-            "Кусок хлеба",
-            "Монета",
-            "Кусок ткани",
-            "Осколок металла",
-            "Странный кристалл",
-            "Старая карта",
-        ];
-        const randomItem = items[Math.floor(Math.random() * items.length)];
+        // Используем метод из CharacterStore
+        const randomItem = characterStore.getRandomItem();
 
         // Добавляем запись в журнал о находке
         journalStore.addEntry(`Вы нашли предмет: ${randomItem}`, "item");
@@ -1193,18 +1213,134 @@ const GameInterface: React.FC = observer(() => {
         gold: number;
         items: string[];
     }) => {
-        // Здесь будет логика для обновления персонажа с учетом полученной награды
+        // Используем метод из CharacterStore для обновления персонажа
+        characterStore.applyBattleRewards(rewards);
+
+        // Добавляем запись в журнал о полученной награде
+        journalStore.addEntry(
+            `Вы победили в бою и получили ${rewards.experience} опыта и ${rewards.gold} золота!`,
+            "combat"
+        );
+
+        // Если были получены предметы, отображаем их
+        if (rewards.items.length > 0) {
+            journalStore.addEntry(
+                `Получены предметы: ${rewards.items.join(", ")}`,
+                "item"
+            );
+        }
+
+        // Инвалидируем данные персонажа после боя
+        if (characterStore.selectedCharacter) {
+            queryClient.invalidateQueries({
+                queryKey: ["character", characterStore.selectedCharacter.id],
+            });
+        }
     };
 
     // Обработчик поражения в бою
     const handleCombatDefeat = () => {
-        // Здесь будет логика для обработки поражения персонажа
+        if (!characterStore.selectedCharacter) return;
+
+        // Записываем в журнал о поражении
+        journalStore.addEntry(
+            "Вы проиграли бой и потеряли сознание...",
+            "combat"
+        );
+
+        // Сбрасываем текущий бой
+        setIsCombatModalOpen(false);
+        setTimeout(() => setCurrentEnemy(null), 300);
+
+        // Восстанавливаем минимальное здоровье персонажа
+        if (characterStore.selectedCharacter.health <= 0) {
+            characterStore.restoreResources(
+                Math.ceil(characterStore.selectedCharacter.max_health * 0.1), // 10% от максимального здоровья
+                0,
+                0
+            );
+        }
+
+        // Можно добавить дополнительные штрафы или последствия поражения
+        journalStore.addEntry(
+            "Вы очнулись и можете продолжить приключение, но будьте осторожнее...",
+            "system"
+        );
+
+        // Инвалидируем данные персонажа после боя
+        queryClient.invalidateQueries({
+            queryKey: ["character", characterStore.selectedCharacter.id],
+        });
     };
 
     // Обработчик для показа требований локации
     const handleShowLocationRequirements = (location: Location) => {
         setSelectedLocation(location);
         setIsRequirementsModalOpen(true);
+    };
+
+    // Проверяет, соответствует ли персонаж требованиям локации
+    const checkLocationRequirements = (location: Location): boolean => {
+        if (!location.requirements || location.requirements.length === 0) {
+            return true;
+        }
+
+        // Проверяем каждое требование с помощью CharacterStore
+        return location.requirements.every((req) =>
+            characterStore.meetsRequirement(req)
+        );
+    };
+
+    // Обработчик выбора объекта
+    const handleObjectSelect = (object: LocationObject) => {
+        if (object.type === "npc") {
+            journalStore.addEntry(`Вы встретили ${object.name}`, "location");
+            setSelectedNpc(object);
+            setIsNpcModalOpen(true);
+        } else if (object.type === "monster") {
+            // Запускаем бой при выборе монстра
+            if (activeLocation) {
+                const locationId = activeLocation.id.toString();
+                const enemies = locationEnemies[locationId];
+
+                if (enemies) {
+                    const enemy = enemies.find((e) => e.id === object.id);
+                    if (enemy) {
+                        journalStore.addEntry(
+                            `Вы вступили в бой с ${object.name}`,
+                            "combat"
+                        );
+                        setCurrentEnemy(enemy);
+                        setIsCombatModalOpen(true);
+                    }
+                }
+            }
+        } else {
+            journalStore.addEntry(`Вы исследуете ${object.name}`, "location");
+            // Здесь будет логика для других типов объектов
+        }
+    };
+
+    // Функция для завершения туториала
+    const handleTutorialComplete = () => {
+        if (characterStore.selectedCharacter) {
+            // Используем метод из CharacterStore с колбэком для инвалидации
+            characterStore.completeTutorial(
+                characterStore.selectedCharacter.id,
+                () => {
+                    // Инвалидируем данные персонажа после завершения туториала
+                    queryClient.invalidateQueries({
+                        queryKey: [
+                            "character",
+                            characterStore.selectedCharacter!.id,
+                        ],
+                    });
+                    setShowTutorial(false);
+                }
+            );
+        } else {
+            setShowTutorial(false);
+        }
     };
 
     // Отображаем загрузку
@@ -1252,140 +1388,7 @@ const GameInterface: React.FC = observer(() => {
     return (
         <div className="fixed inset-0 bg-gray-900 flex flex-col overflow-hidden">
             {/* Верхняя панель с информацией о персонаже */}
-            <div className="h-24 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border-b border-red-900/60 flex items-center px-6 py-3 justify-between shadow-lg">
-                {/* Аватар и имя персонажа */}
-                <div className="flex items-center bg-gray-900/60 p-2 rounded-lg border border-red-900/40 shadow-md">
-                    <div className="relative mr-3">
-                        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-red-800 shadow-lg">
-                            <img
-                                src={`/images/classes/${character.class}.jpg`}
-                                alt={character.class}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                    (e.target as HTMLImageElement).src =
-                                        "/images/fallback-hero.jpg";
-                                }}
-                            />
-                        </div>
-                        <div className="absolute -bottom-1 -right-1 bg-red-900 text-xs text-white px-1 rounded-sm border border-red-700 shadow">
-                            {character.level}
-                        </div>
-                    </div>
-
-                    <div>
-                        <div className="text-sm text-red-400 font-medieval">
-                            {character.name}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                            {activeLocation?.name || "Неизвестное место"}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Основной блок ресурсов (здоровье, мана, выносливость) */}
-                <div className="flex-1 max-w-md mx-6 space-y-1 bg-gray-900/60 p-3 rounded-lg border border-red-900/40 shadow-md">
-                    <ResourceBar
-                        current={character.health}
-                        max={character.max_health}
-                        color="bg-gradient-to-r from-red-800 to-red-600"
-                        label="ЗДР"
-                    />
-                    <ResourceBar
-                        current={character.mana}
-                        max={character.max_mana}
-                        color="bg-gradient-to-r from-blue-800 to-blue-600"
-                        label="МАН"
-                    />
-                    <ResourceBar
-                        current={character.stamina}
-                        max={character.max_stamina}
-                        color="bg-gradient-to-r from-green-800 to-green-600"
-                        label="ВЫН"
-                    />
-                </div>
-
-                {/* Дополнительные характеристики (скорость, опыт) */}
-                <div className="w-48 mx-4 space-y-2">
-                    {/* Блок скорости */}
-                    <div
-                        className="bg-gray-900/60 px-3 py-1 rounded text-xs text-gray-300 border border-gray-700 flex items-center justify-between shadow-md"
-                        title="Скорость перемещения влияет на время путешествия между локациями"
-                    >
-                        <span className="flex items-center">
-                            <span className="text-lime-500 mr-2">🏃</span>{" "}
-                            Скорость
-                        </span>
-                        <span className="text-lime-400 font-bold">
-                            {character.speed}
-                        </span>
-                    </div>
-
-                    {/* Полоса опыта */}
-                    <div className="bg-gray-900/60 px-2 py-1 rounded border border-gray-700 shadow-md">
-                        <div className="flex justify-between text-xs text-gray-400 mb-1">
-                            <span>Опыт:</span>
-                            <span className="text-yellow-400">
-                                {character.experience}/
-                                {character.exp_to_next_level}
-                            </span>
-                        </div>
-                        <div className="h-2 relative w-full bg-gray-900 rounded-full overflow-hidden border border-gray-800">
-                            <div
-                                className="h-full bg-gradient-to-r from-yellow-700 to-yellow-500 transition-all duration-300"
-                                style={{
-                                    width: `${
-                                        (character.experience /
-                                            character.exp_to_next_level) *
-                                        100
-                                    }%`,
-                                }}
-                            ></div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Кнопки быстрого доступа */}
-                <div className="flex space-x-3 mx-4">
-                    <button
-                        className="bg-gradient-to-b from-gray-800 to-gray-900 border border-red-900/40 rounded-md p-2 hover:from-gray-700 hover:to-gray-800 transition-all shadow-md group"
-                        title="Инвентарь"
-                    >
-                        <div className="flex flex-col items-center">
-                            <span className="text-xl text-red-500 group-hover:text-red-400">
-                                🎒
-                            </span>
-                            <span className="text-xs text-gray-400 mt-1 group-hover:text-gray-300">
-                                Инвентарь
-                            </span>
-                        </div>
-                    </button>
-                    <button
-                        className="bg-gradient-to-b from-gray-800 to-gray-900 border border-red-900/40 rounded-md p-2 hover:from-gray-700 hover:to-gray-800 transition-all shadow-md group"
-                        title="Способности и навыки"
-                    >
-                        <div className="flex flex-col items-center">
-                            <span className="text-xl text-red-500 group-hover:text-red-400">
-                                ⚔️
-                            </span>
-                            <span className="text-xs text-gray-400 mt-1 group-hover:text-gray-300">
-                                Навыки
-                            </span>
-                        </div>
-                    </button>
-                </div>
-
-                {/* Валюта */}
-                <div className="grid grid-cols-2 gap-2 ml-4 w-32">
-                    {/* Блок золота */}
-                    <div className="bg-gray-900/60 px-3 py-1 rounded text-xs text-gray-300 border border-gray-700 flex items-center shadow-md">
-                        <span className="text-yellow-500 mr-2">💰</span> 0
-                    </div>
-                    {/* Блок алмазов */}
-                    <div className="bg-gray-900/60 px-3 py-1 rounded text-xs text-gray-300 border border-gray-700 flex items-center shadow-md">
-                        <span className="text-red-500 mr-2">💎</span> 0
-                    </div>
-                </div>
-            </div>
+            <GameHeader activeLocationName={activeLocation?.name} />
 
             {/* Основной контент */}
             <div className="flex-1 flex">
@@ -1395,6 +1398,39 @@ const GameInterface: React.FC = observer(() => {
                         <h3 className="text-red-500 text-sm font-medieval uppercase tracking-wider text-center">
                             Доступные переходы
                         </h3>
+
+                        {activeLocation?.region && (
+                            <div className="mt-2 flex items-center justify-center">
+                                <div className="px-3 py-1 bg-gray-800/70 rounded-md border border-red-900/30">
+                                    <div className="flex items-center">
+                                        {activeLocation.region.icon && (
+                                            <img
+                                                src={getImageUrl(
+                                                    activeLocation.region.icon
+                                                )}
+                                                alt={activeLocation.region.name}
+                                                className="w-4 h-4 mr-2"
+                                                onError={(
+                                                    e: React.SyntheticEvent<HTMLImageElement>
+                                                ) => {
+                                                    (
+                                                        e.target as HTMLImageElement
+                                                    ).src =
+                                                        window.location.origin +
+                                                        "/images/icons/region-default.png";
+                                                }}
+                                            />
+                                        )}
+                                        <span className="text-xs text-gray-400">
+                                            Текущий регион:{" "}
+                                            <span className="text-red-400">
+                                                {activeLocation.region.name}
+                                            </span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                     <div className="p-2 space-y-2 flex-1 game-panel overflow-y-auto">
                         {locationStore.availableLocations
@@ -1512,7 +1548,9 @@ const GameInterface: React.FC = observer(() => {
                             )}
                             alt={activeLocation?.name || "Локация"}
                             className="w-full h-full object-cover opacity-90"
-                            onError={(e) => {
+                            onError={(
+                                e: React.SyntheticEvent<HTMLImageElement>
+                            ) => {
                                 (e.target as HTMLImageElement).src =
                                     window.location.origin +
                                     "/images/locations/fallback_location.jpg";
@@ -1584,17 +1622,6 @@ const GameInterface: React.FC = observer(() => {
                                 В этой локации нет объектов
                             </div>
                         )}
-                    </div>
-
-                    <div className="p-2 mt-2">
-                        <LocationMap
-                            locations={locationStore.availableLocations}
-                            connections={locationConnections}
-                            currentLocation={activeLocation}
-                            onLocationSelect={handleLocationSelect}
-                            width={250}
-                            height={150}
-                        />
                     </div>
                 </div>
             </div>
@@ -1776,15 +1803,7 @@ const GameInterface: React.FC = observer(() => {
             {characterStore.selectedCharacter && (
                 <TutorialModal
                     isOpen={showTutorial}
-                    onClose={() => {
-                        setShowTutorial(false);
-                        // После закрытия туториала обновляем информацию о персонаже
-                        if (characterStore.selectedCharacter) {
-                            characterStore.loadCharacter(
-                                characterStore.selectedCharacter.id
-                            );
-                        }
-                    }}
+                    onClose={handleTutorialComplete}
                     characterName={characterStore.selectedCharacter.name}
                     characterId={characterStore.selectedCharacter.id}
                 />
@@ -1793,4 +1812,4 @@ const GameInterface: React.FC = observer(() => {
     );
 });
 
-export default GameInterface;
+export default GameInterfaceWithQueryProvider;

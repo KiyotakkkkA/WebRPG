@@ -19,12 +19,13 @@ class AdminLocationController extends Controller
      */
     public function index()
     {
-        $locations = Location::withCount([
-            'connectedLocations',
-            'requirements',
-            'objects',
-            'resources'
-        ])->get();
+        $locations = Location::with('region')
+            ->withCount([
+                'connectedLocations',
+                'requirements',
+                'objects',
+                'resources'
+            ])->get();
 
         return response()->json($locations);
     }
@@ -35,6 +36,7 @@ class AdminLocationController extends Controller
     public function show(Location $location)
     {
         $location->load([
+            'region',
             'connectedLocations',
             'connectedFrom',
             'requirements',
@@ -58,6 +60,7 @@ class AdminLocationController extends Controller
             'is_discoverable' => 'required|in:true,false,0,1',
             'position_x' => 'required|numeric',
             'position_y' => 'required|numeric',
+            'region_id' => 'nullable|exists:regions,id',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
         ]);
 
@@ -111,6 +114,7 @@ class AdminLocationController extends Controller
             'is_discoverable' => 'required|in:true,false,0,1',
             'position_x' => 'required|numeric',
             'position_y' => 'required|numeric',
+            'region_id' => 'nullable|exists:regions,id',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,webp|max:5120',
         ]);
 

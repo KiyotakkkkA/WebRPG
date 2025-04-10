@@ -34,6 +34,25 @@ class SupportMessageController extends Controller
         $status = $request->input('status');
         $type = $request->input('type');
         $archived = $request->input('archived', '0'); // По умолчанию показываем неархивированные сообщения
+        $search = $request->input('search'); // Поиск по имени или email
+        $dateFrom = $request->input('date_from'); // Фильтр по дате (от)
+        $dateTo = $request->input('date_to'); // Фильтр по дате (до)
+
+        // Параметры сортировки
+        $sortBy = $request->input('sort_by', 'created_at'); // По умолчанию сортируем по дате создания
+        $sortOrder = $request->input('sort_order', 'desc'); // По умолчанию сортируем по убыванию
+
+        // Параметры пагинации
+        $perPage = (int)$request->input('per_page', 20); // Количество записей на странице
+
+        // Валидация параметров сортировки
+        $allowedSortFields = ['created_at', 'status', 'type', 'name', 'character_name'];
+        if (!in_array($sortBy, $allowedSortFields)) {
+            $sortBy = 'created_at';
+        }
+
+        // Валидация порядка сортировки
+        $sortOrder = strtolower($sortOrder) === 'asc' ? 'asc' : 'desc';
 
         // Запрос для получения сообщений с присоединением таблицы пользователей
         $query = SupportMessage::query()
@@ -52,9 +71,35 @@ class SupportMessageController extends Controller
         // Применяем фильтр по архивированию
         $query->where('support_messages.archived', $archived === '1');
 
+        // Применяем поиск по имени или email
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('support_messages.name', 'like', "%{$search}%")
+                  ->orWhere('support_messages.email', 'like', "%{$search}%")
+                  ->orWhere('support_messages.message', 'like', "%{$search}%")
+                  ->orWhere('support_messages.character_name', 'like', "%{$search}%");
+            });
+        }
+
+        // Применяем фильтр по дате (от)
+        if ($dateFrom) {
+            $query->whereDate('support_messages.created_at', '>=', $dateFrom);
+        }
+
+        // Применяем фильтр по дате (до)
+        if ($dateTo) {
+            $query->whereDate('support_messages.created_at', '<=', $dateTo);
+        }
+
         // Сортировка и пагинация
-        $messages = $query->orderBy('support_messages.created_at', 'desc')
-            ->paginate(20);
+        // Добавляем префикс "support_messages." для полей из основной таблицы
+        $sortField = in_array($sortBy, ['created_at', 'status', 'type'])
+            ? 'support_messages.' . $sortBy
+            : $sortBy;
+
+        $messages = $query->orderBy($sortField, $sortOrder)
+            ->paginate($perPage)
+            ->withQueryString(); // Сохраняем параметры запроса в URL пагинации
 
         return response()->json($messages);
     }

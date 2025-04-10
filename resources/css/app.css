@@ -264,3 +264,90 @@ h1,
 .animation-delay-1000 {
     animation-delay: 1s;
 }
+
+/* Анимации для панели поддержки */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-fadeIn {
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 0.3;
+    }
+    50% {
+        opacity: 0.6;
+    }
+    100% {
+        opacity: 0.3;
+    }
+}
+
+.animate-pulse {
+    animation: pulse 2s infinite;
+}
+
+/* Стили для административной панели поддержки */
+.support-admin-panel {
+    transition: all 0.3s ease;
+}
+
+.support-admin-panel .message-card {
+    transition: all 0.2s ease-out;
+}
+
+.support-admin-panel .message-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Анимация для модальных окон и вкладок */
+.support-tab-enter {
+    opacity: 0;
+    transform: translateX(20px);
+}
+
+.support-tab-enter-active {
+    opacity: 1;
+    transform: translateX(0);
+    transition: opacity 300ms, transform 300ms;
+}
+
+.support-tab-exit {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.support-tab-exit-active {
+    opacity: 0;
+    transform: translateX(-20px);
+    transition: opacity 300ms, transform 300ms;
+}
+
+/* Стили для полей ввода панели поддержки */
+.support-admin-panel input:focus,
+.support-admin-panel select:focus,
+.support-admin-panel textarea:focus {
+    outline: none;
+    border-color: rgba(220, 38, 38, 0.5);
+    box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.5);
+}
+
+/* Стили для полей ввода с красным контуром */
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none !important;
+    border-color: rgba(220, 38, 38, 0.5) !important;
+    box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.5) !important;
+}
