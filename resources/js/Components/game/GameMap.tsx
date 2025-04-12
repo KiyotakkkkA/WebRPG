@@ -1,4 +1,10 @@
-import React, { useRef, useEffect, useState, useCallback } from "react";
+import React, {
+    useRef,
+    useEffect,
+    useState,
+    useCallback,
+    useMemo,
+} from "react";
 import axios from "../../config/axios";
 
 interface MapNode {
@@ -11,12 +17,14 @@ interface MapNode {
     is_accessible?: boolean;
     is_current?: boolean;
     danger_level?: number;
+    type?: string;
 }
 
 interface MapConnection {
     from_id: number;
     to_id: number;
     travel_time: number;
+    is_bidirectional: boolean;
 }
 
 interface MapBounds {
@@ -64,22 +72,90 @@ const GameMap: React.FC<GameMapProps> = ({
     } | null>(null);
 
     // Рефы для отслеживания последних значений параметров
-    const lastMapModeRef = useRef(mapMode);
-    const lastRegionIdRef = useRef(regionId);
-    const lastCharacterIdRef = useRef(characterId);
+    const lastMapModeRef = useRef<"world" | "region" | null>(null);
+    const lastRegionIdRef = useRef<number | undefined>(undefined);
+    const lastCharacterIdRef = useRef<number | undefined>(undefined);
     const requestInProgressRef = useRef(false);
+
+    // Определяем объект для хранения скорректированных позиций для каждого узла
+    const [adjustedPositions] = useState<Map<number, { x: number; y: number }>>(
+        new Map()
+    );
+
+    // Функция для определения, является ли соединение двунаправленным
+    const isBidirectionalConnection = useCallback(
+        (fromId: number, toId: number): boolean => {
+            // Проверяем, есть ли соединение в обратном направлении
+            const hasReverseConnection = connections.some(
+                (conn) => conn.from_id === toId && conn.to_id === fromId
+            );
+
+            // Проверяем, имеет ли текущее соединение флаг is_bidirectional
+            const currentConnection = connections.find(
+                (conn) => conn.from_id === fromId && conn.to_id === toId
+            );
+
+            return (
+                hasReverseConnection ||
+                currentConnection?.is_bidirectional ||
+                false
+            );
+        },
+        [connections]
+    );
+
+    // Функция для преобразования координат из пространства карты в пространство канваса
+    const mapToCanvas = useCallback(
+        (x: number, y: number) => {
+            // Если границы карты не определены, возвращаем исходные координаты
+            if (!mapBounds || !canvasRef.current) {
+                return { x, y };
+            }
+
+            const canvas = canvasRef.current;
+            const mapWidth = mapBounds.max_x - mapBounds.min_x;
+            const mapHeight = mapBounds.max_y - mapBounds.min_y;
+
+            // Расчет масштабированной и смещенной позиции
+            const canvasX =
+                ((x - mapBounds.min_x) / mapWidth) * canvas.width * scale +
+                offset.x;
+            const canvasY =
+                ((y - mapBounds.min_y) / mapHeight) * canvas.height * scale +
+                offset.y;
+
+            return { x: canvasX, y: canvasY };
+        },
+        [mapBounds, scale, offset]
+    );
+
+    // Создаем уникальный ключ для текущего состояния карты
+    const mapStateKey = useMemo(
+        () => `${mapMode}-${regionId}-${Date.now()}`,
+        [mapMode, regionId]
+    );
 
     // Мемоизируем функцию загрузки данных карты
     const fetchMapData = useCallback(async () => {
         // Проверяем, не запущен ли уже запрос
-        if (requestInProgressRef.current) return;
+        if (requestInProgressRef.current) {
+            return;
+        }
 
-        // Проверяем, изменились ли важные параметры
+        // Если режим карты или ID региона не заданы, ничего не делаем
+        if (mapMode === undefined) {
+            return;
+        }
+
+        // Проверяем, изменились ли важные параметры или принудительно ли нужно запросить данные
+        const isModeChanged = lastMapModeRef.current !== mapMode;
+        const isRegionChanged = lastRegionIdRef.current !== regionId;
+        const forceUpdate = isModeChanged || isRegionChanged;
+
         if (
-            lastMapModeRef.current === mapMode &&
-            lastRegionIdRef.current === regionId &&
-            lastCharacterIdRef.current === characterId &&
-            nodes.length > 0
+            !forceUpdate &&
+            nodes.length > 0 &&
+            lastCharacterIdRef.current === characterId
         ) {
             return;
         }
@@ -97,19 +173,33 @@ const GameMap: React.FC<GameMapProps> = ({
             let response;
 
             if (mapMode === "world") {
+                // Для мировой карты загружаем данные о регионах
+
                 response = await axios.get("/api/world-map");
-                setNodes(response.data.regions);
+
+                setNodes(
+                    response.data.regions.map((region: any) => ({
+                        ...region,
+                        type: "region",
+                    }))
+                );
                 setConnections([]);
-            } else if (mapMode === "region" && regionId) {
+                setMapBounds(response.data.map_bounds);
+            } else if (regionId) {
+                // Для карты региона загружаем локации и соединения
+
                 response = await axios.get(`/api/region-map/${regionId}`, {
-                    params: { character_id: characterId },
+                    params: {
+                        character_id: characterId,
+                    },
                 });
+
                 setNodes(response.data.locations);
                 setConnections(response.data.connections);
-            }
-
-            if (response?.data.map_bounds) {
                 setMapBounds(response.data.map_bounds);
+            } else {
+                console.warn("Не указан ID региона для режима region");
+                return;
             }
 
             // Сбросить масштаб и позицию
@@ -120,8 +210,8 @@ const GameMap: React.FC<GameMapProps> = ({
             setError(err.response?.data?.message || "Ошибка загрузки карты");
             console.error("Ошибка загрузки карты:", err);
         } finally {
-            setIsLoading(false);
             requestInProgressRef.current = false;
+            setIsLoading(false);
         }
     }, [mapMode, regionId, characterId]);
 
@@ -129,6 +219,19 @@ const GameMap: React.FC<GameMapProps> = ({
     useEffect(() => {
         fetchMapData();
     }, [fetchMapData]);
+
+    // Этот эффект будет запускаться при каждом изменении режима карты или ID региона
+    useEffect(() => {
+        // Принудительно сбрасываем кэширование и запрашиваем новые данные
+        setNodes([]);
+        setConnections([]);
+        lastMapModeRef.current = null;
+        lastRegionIdRef.current = undefined;
+        lastCharacterIdRef.current = undefined;
+
+        // Немедленно запускаем загрузку данных для нового режима
+        fetchMapData();
+    }, [mapMode, regionId]);
 
     // Отрисовка карты на канвасе
     useEffect(() => {
@@ -160,229 +263,238 @@ const GameMap: React.FC<GameMapProps> = ({
             return;
         }
 
-        // Функция для преобразования координат из пространства карты в пространство канваса
-        const mapToCanvas = (x: number, y: number) => {
-            const mapWidth = mapBounds.max_x - mapBounds.min_x;
-            const mapHeight = mapBounds.max_y - mapBounds.min_y;
-
-            // Расчет масштабированной и смещенной позиции
-            const canvasX =
-                ((x - mapBounds.min_x) / mapWidth) * canvas.width * scale +
-                offset.x;
-            const canvasY =
-                ((y - mapBounds.min_y) / mapHeight) * canvas.height * scale +
-                offset.y;
-
-            return { x: canvasX, y: canvasY };
-        };
-
-        // Функция для преобразования координат из пространства канваса в пространство карты
-        const canvasToMap = (x: number, y: number) => {
-            const mapWidth = mapBounds.max_x - mapBounds.min_x;
-            const mapHeight = mapBounds.max_y - mapBounds.min_y;
-
-            const mapX =
-                ((x - offset.x) / (canvas.width * scale)) * mapWidth +
-                mapBounds.min_x;
-            const mapY =
-                ((y - offset.y) / (canvas.height * scale)) * mapHeight +
-                mapBounds.min_y;
-
-            return { x: mapX, y: mapY };
-        };
-
         // Функция для отрисовки карты
         const drawMap = () => {
-            // Очистка канваса
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Фон карты (темный градиент)
-            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            gradient.addColorStop(0, "#111827");
-            gradient.addColorStop(1, "#0d1425");
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Создаем Set для отслеживания уже отрисованных соединений
+            const drawnConnections = new Set<string>();
 
-            // ВАЖНО: Удаляем отрисовку сетки, оставляем только установку стилей для линий
-            ctx.strokeStyle = "rgba(55, 65, 81, 0.2)";
-            ctx.lineWidth = 1;
+            // Отрисовываем соединения между локациями
+            ctx.save();
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
 
-            // Отрисовка соединений (путей между локациями)
-            if (mapMode === "region" && connections && connections.length > 0) {
-                connections.forEach((connection) => {
-                    const fromNode = nodes.find(
-                        (node) => node.id === connection.from_id
-                    );
-                    const toNode = nodes.find(
-                        (node) => node.id === connection.to_id
-                    );
+            for (const connection of connections) {
+                const fromNode = nodes.find(
+                    (node) => node.id === connection.from_id
+                );
+                const toNode = nodes.find(
+                    (node) => node.id === connection.to_id
+                );
 
-                    if (fromNode && toNode) {
-                        const { x: x1, y: y1 } = mapToCanvas(
-                            fromNode.position_x,
-                            fromNode.position_y
-                        );
-                        const { x: x2, y: y2 } = mapToCanvas(
-                            toNode.position_x,
-                            toNode.position_y
-                        );
+                if (!fromNode || !toNode) {
+                    continue;
+                }
 
-                        // Рисуем линию пути (красная для достпных, серая для недоступных)
-                        const isAccessible =
-                            fromNode.is_accessible && toNode.is_accessible;
-                        ctx.strokeStyle = isAccessible
-                            ? "rgba(185, 28, 28, 0.6)"
-                            : "rgba(75, 85, 99, 0.4)";
-                        ctx.lineWidth = 2;
-                        ctx.setLineDash([5, 5]);
+                // Создаем уникальный ключ для пары узлов (сортируем ID для уникальности)
+                const nodeIds = [fromNode.id, toNode.id].sort((a, b) => a - b);
+                const connectionKey = `${nodeIds[0]}-${nodeIds[1]}`;
 
-                        ctx.beginPath();
-                        ctx.moveTo(x1, y1);
-                        ctx.lineTo(x2, y2);
-                        ctx.stroke();
-                        ctx.setLineDash([]);
+                // Если соединение между этими узлами уже отрисовано, пропускаем
+                if (drawnConnections.has(connectionKey)) {
+                    continue;
+                }
 
-                        // Рисуем время в пути, если есть
-                        if (connection.travel_time > 0) {
-                            const midX = (x1 + x2) / 2;
-                            const midY = (y1 + y2) / 2;
+                // Получаем исходные позиции узлов
+                const fromPosition = {
+                    x: fromNode.position_x,
+                    y: fromNode.position_y,
+                };
+                const toPosition = {
+                    x: toNode.position_x,
+                    y: toNode.position_y,
+                };
 
-                            ctx.font = "10px Arial";
-                            ctx.fillStyle = isAccessible
-                                ? "rgba(252, 165, 165, 0.8)"
-                                : "rgba(156, 163, 175, 0.6)";
-                            ctx.fillText(
-                                `${connection.travel_time} секунд`,
-                                midX,
-                                midY
-                            );
-                        }
-                    }
-                });
-            }
+                const fromCanvasPos = mapToCanvas(
+                    fromPosition.x,
+                    fromPosition.y
+                );
+                const toCanvasPos = mapToCanvas(toPosition.x, toPosition.y);
 
-            // Отрисовка узлов (регионов или локаций)
-            if (nodes && nodes.length > 0) {
-                nodes.forEach((node) => {
-                    const { x, y } = mapToCanvas(
-                        node.position_x,
-                        node.position_y
-                    );
+                // Адаптивная толщина линии в зависимости от масштаба
+                const lineWidth = Math.max(2, Math.min(4, 2.5 * scale));
 
-                    // Определяем цвет и размер узла
-                    let nodeSize = 8;
-                    let color = "#4B5563"; // Серый по умолчанию
+                // Проверяем, является ли соединение двунаправленным
+                const isBidirectional = isBidirectionalConnection(
+                    connection.from_id,
+                    connection.to_id
+                );
 
-                    if (mapMode === "world") {
-                        nodeSize = 12;
-                        color = "#7F1D1D"; // Темно-красный для регионов
-                    } else {
-                        // Для локаций
-                        if (node.is_current) {
-                            nodeSize = 12;
-                            color = "#FBBF24"; // Желтый для текущей локации
-                        } else if (node.is_accessible === false) {
-                            color = "#4B5563"; // Серый для недоступных
-                        } else {
-                            // Цвет в зависимости от уровня опасности
-                            if (node.danger_level === 0) {
-                                color = "#10B981"; // Зеленый для безопасных
-                            } else if (
-                                node.danger_level &&
-                                node.danger_level < 3
-                            ) {
-                                color = "#F59E0B"; // Оранжевый для низкой опасности
-                            } else if (
-                                node.danger_level &&
-                                node.danger_level < 5
-                            ) {
-                                color = "#EF4444"; // Красный для средней опасности
-                            } else {
-                                color = "#991B1B"; // Темно-красный для высокой опасности
-                            }
-                        }
-                    }
-
-                    // Увеличенный размер для подсвеченного или выбранного узла
-                    if (hoveredNode?.id === node.id) {
-                        nodeSize += 4;
-                    }
-                    if (selectedNode?.id === node.id) {
-                        nodeSize += 6;
-
-                        // Рисуем выделение вокруг выбранного узла
-                        ctx.beginPath();
-                        ctx.arc(x, y, nodeSize + 4, 0, Math.PI * 2);
-                        ctx.fillStyle = "rgba(252, 211, 77, 0.3)";
-                        ctx.fill();
-                    }
-
-                    // Рисуем узел
+                // Определяем стиль линии в зависимости от типа соединения
+                if (isBidirectional) {
+                    // Двустороннее соединение - сплошная красная линия
                     ctx.beginPath();
-                    ctx.arc(x, y, nodeSize, 0, Math.PI * 2);
-                    ctx.fillStyle = color;
+                    ctx.strokeStyle = "#b91c1c"; // Темно-красный
+                    ctx.lineWidth = lineWidth;
+                    ctx.setLineDash([]); // Сплошная линия
+                    ctx.moveTo(fromCanvasPos.x, fromCanvasPos.y);
+                    ctx.lineTo(toCanvasPos.x, toCanvasPos.y);
+                    ctx.stroke();
+                } else {
+                    // Одностороннее соединение - пунктирная линия
+                    ctx.beginPath();
+                    ctx.strokeStyle = "#b91c1c"; // Темно-красный
+                    ctx.lineWidth = lineWidth;
+                    ctx.setLineDash([5, 5]); // Пунктирная линия
+                    ctx.moveTo(fromCanvasPos.x, fromCanvasPos.y);
+                    ctx.lineTo(toCanvasPos.x, toCanvasPos.y);
+                    ctx.stroke();
+                }
+
+                // Рисуем стрелку направления на линии только для однонаправленных соединений
+                if (!isBidirectional) {
+                    // Вычисляем точку для стрелки (3/4 пути от начала)
+                    const arrowPosX =
+                        fromCanvasPos.x +
+                        (toCanvasPos.x - fromCanvasPos.x) * 0.75;
+                    const arrowPosY =
+                        fromCanvasPos.y +
+                        (toCanvasPos.y - fromCanvasPos.y) * 0.75;
+
+                    // Размер стрелки зависит от масштаба
+                    const arrowSize = 5 * scale;
+
+                    // Вычисляем углы для стрелки
+                    const arrowAngle = Math.atan2(
+                        toCanvasPos.y - fromCanvasPos.y,
+                        toCanvasPos.x - fromCanvasPos.x
+                    );
+
+                    ctx.save();
+                    ctx.translate(arrowPosX, arrowPosY);
+                    ctx.rotate(arrowAngle);
+
+                    // Рисуем стрелку
+                    ctx.fillStyle = "#b91c1c"; // Темно-красный
+                    ctx.beginPath();
+                    ctx.moveTo(arrowSize, 0);
+                    ctx.lineTo(-arrowSize, arrowSize);
+                    ctx.lineTo(-arrowSize, -arrowSize);
+                    ctx.closePath();
                     ctx.fill();
 
-                    // Рисуем границу узла
-                    ctx.strokeStyle = "#1F2937";
-                    ctx.lineWidth = 1.5;
-                    ctx.stroke();
+                    ctx.restore();
+                }
 
-                    // Рисуем название узла
-                    ctx.font = "bold 12px Arial";
-                    ctx.fillStyle = node.is_current ? "#FCD34D" : "#D1D5DB";
-                    ctx.textAlign = "center";
-                    ctx.fillText(node.name, x, y - nodeSize - 5);
-                });
+                // Отмечаем соединение как отрисованное
+                drawnConnections.add(connectionKey);
             }
+            ctx.restore();
 
-            // Отображение информации о наведенном узле
-            if (hoveredNode) {
-                const { x, y } = mapToCanvas(
-                    hoveredNode.position_x,
-                    hoveredNode.position_y
+            // Отрисовка локаций
+            for (const node of nodes) {
+                // Получаем позицию узла на канвасе
+                const { x, y } = mapToCanvas(node.position_x, node.position_y);
+
+                // Определяем размер и цвет узла
+                const baseSize = 16 * scale; // Базовый размер
+
+                // Увеличиваем размер для текущего или выбранного узла
+                let nodeSize = baseSize;
+                if (node.is_current) {
+                    nodeSize = baseSize * 1.2;
+                }
+                if (node.id === hoveredNode?.id) {
+                    nodeSize *= 1.1;
+                }
+                if (node.id === selectedNode?.id) {
+                    nodeSize *= 1.2;
+                }
+
+                // Внешняя подсветка для узлов
+                ctx.save();
+                if (node.is_current) {
+                    // Яркая подсветка для текущей локации
+                    ctx.shadowColor = "rgba(185, 28, 28, 0.8)"; // Темно-красный
+                    ctx.shadowBlur = 10 * scale;
+                } else if (node.id === selectedNode?.id) {
+                    // Подсветка для выбранной локации
+                    ctx.shadowColor = "rgba(185, 28, 28, 0.6)"; // Темно-красный
+                    ctx.shadowBlur = 8 * scale;
+                } else if (node.id === hoveredNode?.id) {
+                    // Подсветка для локации под курсором
+                    ctx.shadowColor = "rgba(185, 28, 28, 0.4)"; // Темно-красный
+                    ctx.shadowBlur = 6 * scale;
+                }
+
+                // Создаем градиент для заливки
+                const gradient = ctx.createRadialGradient(
+                    x,
+                    y,
+                    0,
+                    x,
+                    y,
+                    nodeSize
                 );
 
-                // Фон для подсказки
-                const tooltipWidth = 200;
-                const tooltipHeight = 60;
-                const tooltipX = Math.min(
-                    x + 15,
-                    canvas.width - tooltipWidth - 10
-                );
-                const tooltipY = Math.min(
-                    y + 15,
-                    canvas.height - tooltipHeight - 10
-                );
+                // Выбираем цвета градиента в зависимости от типа узла
+                if (node.is_current) {
+                    // Текущая локация - яркий красный
+                    gradient.addColorStop(0, "#ef4444"); // Красный
+                    gradient.addColorStop(1, "#b91c1c"); // Темно-красный
+                } else if (node.id === selectedNode?.id) {
+                    // Выбранная локация - красный
+                    gradient.addColorStop(0, "#dc2626"); // Красный
+                    gradient.addColorStop(1, "#991b1b"); // Темно-красный
+                } else if (node.is_accessible === false) {
+                    // Недоступная локация - серая темная
+                    gradient.addColorStop(0, "#4b5563"); // Серый (более темный)
+                    gradient.addColorStop(1, "#1f2937"); // Темно-серый
+                } else if (mapMode === "world" || node.type === "region") {
+                    // Узел мировой карты (регион) - серый
+                    gradient.addColorStop(0, "#6b7280"); // Серый
+                    gradient.addColorStop(1, "#374151"); // Темно-серый
+                } else {
+                    // Обычная доступная локация - серая
+                    gradient.addColorStop(0, "#6b7280"); // Серый
+                    gradient.addColorStop(1, "#374151"); // Темно-серый
+                }
 
-                ctx.fillStyle = "rgba(17, 24, 39, 0.9)";
-                ctx.strokeStyle = "rgba(185, 28, 28, 0.6)";
-                ctx.lineWidth = 1;
+                // Рисуем узел
+                ctx.fillStyle = gradient;
                 ctx.beginPath();
-                ctx.roundRect(
-                    tooltipX,
-                    tooltipY,
-                    tooltipWidth,
-                    tooltipHeight,
-                    5
-                );
+                ctx.arc(x, y, nodeSize, 0, Math.PI * 2);
                 ctx.fill();
+
+                // Добавляем обводку
+                if (node.is_accessible === false) {
+                    // Серая обводка для недоступных локаций
+                    ctx.strokeStyle = "#6b7280";
+                } else {
+                    // Стандартная обводка для доступных локаций
+                    ctx.strokeStyle = "#f8fafc";
+                }
+                ctx.lineWidth = 1.5 * scale;
                 ctx.stroke();
 
-                // Название
-                ctx.font = "bold 14px Arial";
-                ctx.fillStyle = "#D1D5DB";
-                ctx.textAlign = "left";
-                ctx.fillText(hoveredNode.name, tooltipX + 10, tooltipY + 20);
+                // Сбрасываем тень
+                ctx.restore();
 
-                // Описание (укороченное)
-                ctx.font = "12px Arial";
-                ctx.fillStyle = "#9CA3AF";
-                let description = hoveredNode.description || "";
-                if (description.length > 30) {
-                    description = description.substring(0, 30) + "...";
+                // Рисуем название локации
+                ctx.save();
+
+                // Размер шрифта зависит от масштаба
+                const fontSize = Math.max(12, 14 * scale);
+                ctx.font = `${fontSize}px "Anticva", sans-serif`;
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+
+                // Добавляем тень для текста
+                ctx.shadowColor = "rgba(0, 0, 0, 0.6)";
+                ctx.shadowBlur = 3;
+                ctx.shadowOffsetX = 1;
+                ctx.shadowOffsetY = 1;
+
+                // Отображаем текст под локацией с учетом доступности
+                if (node.is_accessible === false) {
+                    ctx.fillStyle = "#9ca3af"; // Серый текст для недоступных локаций
+                } else {
+                    ctx.fillStyle = "#f1f5f9"; // Белый текст для доступных локаций
                 }
-                ctx.fillText(description, tooltipX + 10, tooltipY + 40);
+                ctx.fillText(node.name, x, y + nodeSize + 15 * scale);
+
+                ctx.restore();
             }
         };
 
@@ -392,9 +504,20 @@ const GameMap: React.FC<GameMapProps> = ({
             if (container) {
                 canvas.width = container.clientWidth;
                 canvas.height = container.clientHeight;
-                requestAnimationFrame(() => drawMap());
+                drawMap();
             }
         };
+
+        // Создаем анимацию для движения пунктирных линий
+        let animationId: number;
+
+        const animate = () => {
+            drawMap();
+            animationId = requestAnimationFrame(animate);
+        };
+
+        // Запускаем анимационный цикл
+        animationId = requestAnimationFrame(animate);
 
         // Инициализация размеров и добавление слушателя изменения размера
         resizeCanvas();
@@ -423,7 +546,7 @@ const GameMap: React.FC<GameMapProps> = ({
             const y = e.clientY - rect.top;
 
             // Обновляем координаты курсора в пространстве карты
-            const mapCoords = canvasToMap(x, y);
+            const mapCoords = mapToCanvas(x, y);
             setCursorCoords({
                 x: Math.floor(mapCoords.x),
                 y: Math.floor(mapCoords.y),
@@ -467,6 +590,7 @@ const GameMap: React.FC<GameMapProps> = ({
             // Проверяем, кликнули ли по узлу
             for (const node of nodes) {
                 if (isMouseOverNode(x, y, node)) {
+                    // Устанавливаем выбранный узел и вызываем колбэк
                     setSelectedNode(node);
                     if (onNodeSelect) {
                         onNodeSelect(node);
@@ -527,6 +651,7 @@ const GameMap: React.FC<GameMapProps> = ({
 
         // Очистка слушателей событий при размонтировании
         return () => {
+            cancelAnimationFrame(animationId);
             window.removeEventListener("resize", resizeCanvas);
             canvas.removeEventListener("mousemove", handleMouseMove);
             canvas.removeEventListener("mousedown", handleMouseDown);
@@ -654,47 +779,35 @@ const GameMap: React.FC<GameMapProps> = ({
 
                     {/* Легенда карты */}
                     <div className="absolute bottom-4 left-4 bg-gray-900/80 p-2 rounded-md border border-red-900/40 text-xs">
-                        {mapMode === "world" ? (
-                            <div className="text-gray-300">
-                                <div className="font-bold text-red-400 mb-1">
-                                    Легенда:
-                                </div>
-                                <div className="flex items-center">
-                                    <div className="w-3 h-3 bg-red-800 rounded-full mr-1"></div>
-                                    <span>Регион</span>
-                                </div>
+                        <div className="text-gray-300">
+                            <div className="font-bold text-red-400 mb-1 font-anticva">
+                                Легенда:
                             </div>
-                        ) : (
-                            <div className="text-gray-300">
-                                <div className="font-bold text-red-400 mb-1">
-                                    Легенда:
-                                </div>
-                                <div className="flex items-center">
-                                    <div className="w-3 h-3 bg-yellow-500 rounded-full mr-1"></div>
-                                    <span>Текущая локация</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <div className="w-3 h-3 bg-green-600 rounded-full mr-1"></div>
-                                    <span>Безопасная зона</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <div className="w-3 h-3 bg-yellow-600 rounded-full mr-1"></div>
-                                    <span>Низкая опасность</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <div className="w-3 h-3 bg-red-600 rounded-full mr-1"></div>
-                                    <span>Средняя опасность</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <div className="w-3 h-3 bg-red-900 rounded-full mr-1"></div>
-                                    <span>Высокая опасность</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <div className="w-3 h-3 bg-gray-600 rounded-full mr-1"></div>
-                                    <span>Недоступная локация</span>
-                                </div>
+                            <div className="flex items-center">
+                                <div className="w-3 h-3 bg-red-600 rounded-full mr-1"></div>
+                                <span className="font-anticva">
+                                    Выделенная точка
+                                </span>
                             </div>
-                        )}
+                            <div className="flex items-center">
+                                <div className="w-3 h-3 bg-gray-600 rounded-full mr-1"></div>
+                                <span className="font-anticva">
+                                    Обычная точка
+                                </span>
+                            </div>
+                            <div className="flex items-center mt-1">
+                                <div className="w-6 h-1 bg-red-600 mr-1"></div>
+                                <span className="font-anticva">
+                                    Двустороннее соединение
+                                </span>
+                            </div>
+                            <div className="flex items-center">
+                                <div className="w-6 h-1 border-t-2 border-red-600 border-dashed mr-1"></div>
+                                <span className="font-anticva">
+                                    Одностороннее соединение
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </>
             )}

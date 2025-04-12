@@ -13,7 +13,7 @@ return new class extends Migration
     {
         // Таблица локаций
         Schema::create('locations', function (Blueprint $table) {
-            $table->string('id')->primary();
+            $table->id();
             $table->string('name');
             $table->text('description');
             $table->string('image_url')->nullable();
@@ -28,8 +28,8 @@ return new class extends Migration
         // Таблица связей между локациями
         Schema::create('location_connections', function (Blueprint $table) {
             $table->id();
-            $table->string('from_location_id');
-            $table->string('to_location_id');
+            $table->foreignId('from_location_id');
+            $table->foreignId('to_location_id');
             $table->boolean('is_bidirectional')->default(true);
             $table->integer('travel_time')->default(0)->comment('Время перемещения в секундах');
             $table->timestamps();
@@ -42,7 +42,7 @@ return new class extends Migration
         // Таблица требований для локаций
         Schema::create('location_requirements', function (Blueprint $table) {
             $table->id();
-            $table->string('location_id');
+            $table->foreignId('location_id');
             $table->string('type')->comment('Тип требования: level, quest, skill, gold, item, reputation, attribute');
             $table->string('parameter')->nullable()->comment('Дополнительный параметр (название квеста, навыка и т.д.)');
             $table->integer('value')->default(0)->comment('Требуемое значение');
@@ -55,8 +55,8 @@ return new class extends Migration
         // Таблица объектов на локациях
         Schema::create('location_objects', function (Blueprint $table) {
             $table->id();
-            $table->string('location_id');
-            $table->string('object_id');
+            $table->foreignId('location_id');
+            $table->foreignId('object_id');
             $table->string('type')->comment('Тип объекта: npc, monster, building, resource, etc');
             $table->string('name');
             $table->text('description')->nullable();
@@ -66,13 +66,14 @@ return new class extends Migration
             $table->timestamps();
 
             $table->foreign('location_id')->references('id')->on('locations')->onDelete('cascade');
+            // $table->foreign('object_id')->references('id')->on('game_objects')->onDelete('cascade');
         });
 
         // Таблица ресурсов на локациях
         Schema::create('location_resources', function (Blueprint $table) {
             $table->id();
-            $table->string('location_id');
-            $table->string('resource_id');
+            $table->foreignId('location_id');
+            $table->foreignId('resource_id')->comment('Ссылка на ID ресурса из таблицы resources или другой');
             $table->string('name');
             $table->float('spawn_chance')->default(1.0)->comment('Вероятность появления ресурса (0.0-1.0)');
             $table->integer('min_amount')->default(1);
@@ -80,13 +81,14 @@ return new class extends Migration
             $table->timestamps();
 
             $table->foreign('location_id')->references('id')->on('locations')->onDelete('cascade');
+            // $table->foreign('resource_id')->references('id')->on('resources')->onDelete('cascade');
         });
 
         // Таблица событий на локациях
         Schema::create('location_events', function (Blueprint $table) {
             $table->id();
-            $table->string('location_id');
-            $table->string('event_id');
+            $table->foreignId('location_id');
+            $table->foreignId('event_id')->comment('Ссылка на ID события из таблицы events или другой');
             $table->string('name');
             $table->text('description')->nullable();
             $table->float('trigger_chance')->default(0.1)->comment('Вероятность активации события (0.0-1.0)');
@@ -95,19 +97,20 @@ return new class extends Migration
             $table->timestamps();
 
             $table->foreign('location_id')->references('id')->on('locations')->onDelete('cascade');
+            // $table->foreign('event_id')->references('id')->on('events')->onDelete('cascade');
         });
 
         // Добавляем поле для текущей локации персонажа
         Schema::table('characters', function (Blueprint $table) {
-            $table->string('current_location_id')->nullable()->after('is_active');
+            $table->foreignId('current_location_id')->nullable()->after('is_active');
             $table->foreign('current_location_id')->references('id')->on('locations')->onDelete('set null');
         });
 
         // Таблица для отслеживания открытых локаций для персонажей
         Schema::create('character_discovered_locations', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('character_id');
-            $table->string('location_id');
+            $table->foreignId('character_id');
+            $table->foreignId('location_id');
             $table->timestamp('discovered_at');
 
             $table->foreign('character_id')->references('id')->on('characters')->onDelete('cascade');

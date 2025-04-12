@@ -26,8 +26,7 @@ class RegionController extends Controller
      */
     public function index()
     {
-        $regions = Region::orderBy('display_order', 'asc')
-            ->orderBy('name', 'asc')
+        $regions = Region::orderBy('name', 'asc')
             ->get();
 
         return response()->json($regions);

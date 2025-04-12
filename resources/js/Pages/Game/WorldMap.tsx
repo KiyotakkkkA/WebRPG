@@ -7,6 +7,10 @@ import locationStore, { Location, Region } from "../../stores/LocationStore";
 import Button from "../../Components/ui/Button";
 import GameHeader from "../../Layouts/GameHeader";
 import GameMap from "../../Components/game/GameMap";
+import TravelModal from "../../Components/game/TravelModal";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import journalStore from "../../stores/JournalStore";
+import { findLocationConnection } from "../../scripts/travel";
 
 interface WorldMapProps {
     characterId?: number;
@@ -71,6 +75,7 @@ const BackIcon = ({ size = 24, className = "" }) => (
 const WorldMap: React.FC<WorldMapProps> = observer(({ characterId }) => {
     const navigate = useNavigate();
     const params = useParams();
+    const queryClient = useQueryClient();
     const [mapMode, setMapMode] = useState<"region" | "world">("world");
     const [selectedRegion, setSelectedRegion] = useState<Region | null>(null);
     const [selectedLocation, setSelectedLocation] = useState<Location | null>(
@@ -80,6 +85,28 @@ const WorldMap: React.FC<WorldMapProps> = observer(({ characterId }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [isDetailPanelOpen, setIsDetailPanelOpen] = useState(false);
     const [loadError, setLoadError] = useState<string | null>(null);
+
+    // Состояния для путешествия
+    const [isTravelModalOpen, setIsTravelModalOpen] = useState(false);
+    const [selectedTargetLocation, setSelectedTargetLocation] =
+        useState<Location | null>(null);
+    const [travelTime, setTravelTime] = useState(0);
+    const [baseTravelTime, setBaseTravelTime] = useState(0);
+    const [savedTime, setSavedTime] = useState(0);
+    const [isLocationPreloaded, setIsLocationPreloaded] = useState(false);
+    const [locationConnections, setLocationConnections] = useState<
+        Array<{
+            from_location_id: number;
+            to_location_id: number;
+            travel_time: number;
+            is_bidirectional: boolean;
+        }>
+    >([]);
+
+    // Добавляем состояние для отображения сообщения об ошибке соединения
+    const [connectionErrorMessage, setConnectionErrorMessage] = useState<
+        string | null
+    >(null);
 
     // Реф для отслеживания инициализации данных
     const isInitializedRef = useRef(false);
@@ -131,6 +158,11 @@ const WorldMap: React.FC<WorldMapProps> = observer(({ characterId }) => {
                     }
                 }
 
+                // Загружаем соединения между локациями
+                const connections =
+                    await locationStore.loadLocationConnections();
+                setLocationConnections(connections);
+
                 // Отмечаем, что инициализация выполнена
                 isInitializedRef.current = true;
             } catch (error) {
@@ -155,6 +187,220 @@ const WorldMap: React.FC<WorldMapProps> = observer(({ characterId }) => {
         setSelectedRegion(currentLocation.region);
         setMapMode("region");
     }, [currentLocation?.region?.id]); // Используем только id региона, а не весь объект
+
+    // Мутация для перемещения персонажа
+    const { mutate: moveToLocation } = useMutation({
+        mutationFn: ({
+            characterId,
+            locationId,
+        }: {
+            characterId: number;
+            locationId: number;
+        }) => {
+            return locationStore.moveToLocation(characterId, locationId);
+        },
+        onSuccess: (result) => {
+            if (result.success) {
+                // Обновляем список локаций и информацию о перемещении
+                queryClient.invalidateQueries({
+                    queryKey: ["availableLocations", charId],
+                });
+
+                // Обновляем данные карты
+                queryClient.invalidateQueries({
+                    queryKey: ["regionMap"],
+                });
+
+                queryClient.invalidateQueries({
+                    queryKey: ["worldMap"],
+                });
+
+                // Инвалидируем данные персонажа
+                queryClient.invalidateQueries({
+                    queryKey: ["character", characterId],
+                });
+
+                // Добавляем запись в журнал
+                journalStore.addEntry(
+                    `Вы переместились в локацию ${result.location?.name}`,
+                    "location"
+                );
+
+                // Перезагружаем данные
+                locationStore.loadAvailableLocations(charId).then((data) => {
+                    if (data) {
+                        setLocations(data.availableLocations);
+                        if (data.currentLocation?.region) {
+                            setSelectedRegion(data.currentLocation.region);
+                            setMapMode("region");
+
+                            // Обновляем выбранную локацию и открываем панель деталей
+                            const newCurrentLocation = data.currentLocation;
+                            setSelectedLocation(newCurrentLocation);
+                            setIsDetailPanelOpen(true);
+                        }
+                    }
+                });
+
+                // Закрыть модальное окно
+                setSelectedTargetLocation(null);
+                setIsTravelModalOpen(false);
+                setIsLoading(false);
+            } else {
+                console.error(
+                    `Ошибка при перемещении в локацию: ${result.error}`,
+                    result.debug
+                );
+
+                // Добавляем запись об ошибке
+                journalStore.addEntry(
+                    `Не удалось переместиться в локацию ${selectedTargetLocation?.name}: ${result.error}`,
+                    "error"
+                );
+
+                setLoadError(
+                    result.error ||
+                        "Не удалось переместиться в выбранную локацию"
+                );
+
+                // Закрыть модальное окно
+                setSelectedTargetLocation(null);
+                setIsTravelModalOpen(false);
+                setIsLoading(false);
+            }
+        },
+        onError: (err) => {
+            console.error("Исключение при перемещении в локацию:", err);
+            journalStore.addEntry(
+                `Произошла ошибка при перемещении в локацию`,
+                "error"
+            );
+            setLoadError("Ошибка при перемещении в локацию");
+
+            setSelectedTargetLocation(null);
+            setIsTravelModalOpen(false);
+            setIsLoading(false);
+        },
+    });
+
+    // Функция настройки путешествия
+    const handleTravelSetup = (location: Location) => {
+        // Получаем скорость персонажа
+        const characterSpeed = characterStore.selectedCharacter?.speed || 10;
+
+        // Если currentLocation не определен, не можем продолжить
+        if (!currentLocation) {
+            console.error("Текущая локация не определена");
+            return;
+        }
+
+        // Используем функцию findLocationConnection для проверки соединения
+        const connection = findLocationConnection(
+            currentLocation.id,
+            location.id,
+            locationConnections
+        );
+
+        // Если соединения нет, уведомляем пользователя и не продолжаем
+        if (!connection) {
+            // Показываем сообщение об ошибке
+            setConnectionErrorMessage(
+                `Нет прямого пути между локациями ${currentLocation.name} и ${location.name}. Выберите локацию, которая имеет соединение с текущей.`
+            );
+            journalStore.addEntry(
+                `Не удалось найти путь к локации ${location.name}`,
+                "error"
+            );
+            return;
+        }
+
+        // Если есть соединение, сбрасываем сообщение об ошибке
+        setConnectionErrorMessage(null);
+
+        // Используем время из соединения или 5 секунд по умолчанию
+        let baseTravelTime = connection ? connection.travel_time : 5;
+
+        // Расчет времени с учетом скорости персонажа
+        // Формула: max(3, time - time*(speed/100))
+        const speedModifier = characterSpeed / 100;
+        let calculatedTime = Math.round(
+            baseTravelTime - baseTravelTime * speedModifier
+        );
+
+        // Минимальное время перемещения - 3 секунды
+        const finalTravelTime = Math.max(3, calculatedTime);
+
+        // Расчет сэкономленного времени
+        const savedTime = baseTravelTime - finalTravelTime;
+
+        // Начинаем предзагрузку локации
+        setIsLocationPreloaded(false);
+        setSelectedTargetLocation(location);
+        setTravelTime(finalTravelTime);
+        setBaseTravelTime(baseTravelTime);
+        setSavedTime(savedTime);
+
+        // Предзагружаем данные локации с использованием React Query
+        if (characterStore.selectedCharacter) {
+            queryClient
+                .prefetchQuery({
+                    queryKey: [
+                        "locationDetails",
+                        location.id,
+                        characterStore.selectedCharacter.id,
+                    ],
+                    queryFn: () =>
+                        locationStore.getLocationDetails(
+                            location.id,
+                            characterStore.selectedCharacter!.id
+                        ),
+                    staleTime: 5 * 60 * 1000, // Кэшируем на 5 минут
+                })
+                .then(() => {
+                    setIsLocationPreloaded(true);
+                    // Открываем модальное окно только после предзагрузки данных или по таймауту
+                    setIsTravelModalOpen(true);
+                })
+                .catch((error: unknown) => {
+                    console.error(
+                        "Ошибка при предзагрузке данных локации:",
+                        error
+                    );
+                    // Даже при ошибке предзагрузки открываем модальное окно
+                    setIsTravelModalOpen(true);
+                });
+        } else {
+            // Если нет выбранного персонажа, просто открываем модальное окно
+            setIsTravelModalOpen(true);
+        }
+    };
+
+    // Функция для завершения путешествия и фактического перемещения персонажа
+    const completeTravelToLocation = async () => {
+        if (!characterStore.selectedCharacter || !selectedTargetLocation) {
+            setIsTravelModalOpen(false);
+            return;
+        }
+
+        // Сначала закрываем модальное окно, чтобы таймер не продолжал работать
+        setIsTravelModalOpen(false);
+        setIsLoading(true);
+
+        // Вместо прямого вызова locationStore.moveToLocation используем мутацию
+        moveToLocation({
+            characterId: characterStore.selectedCharacter.id,
+            locationId: selectedTargetLocation.id,
+        });
+
+        // Обратите внимание, что вся логика обработки ответа теперь находится
+        // в обработчиках onSuccess и onError мутации moveToLocation
+    };
+
+    // Функция для отмены путешествия
+    const cancelTravel = () => {
+        setSelectedTargetLocation(null);
+        setIsTravelModalOpen(false);
+    };
 
     // Если произошла ошибка загрузки, показываем сообщение и кнопку возврата
     if (loadError) {
@@ -215,14 +461,47 @@ const WorldMap: React.FC<WorldMapProps> = observer(({ characterId }) => {
             // Если выбран регион на мировой карте
             const region = regions.find((r) => r.id === node.id);
             if (region) {
-                handleRegionSelect(region);
+                // Обновляем состояние с задержкой, чтобы избежать проблем с обновлением
+                setTimeout(() => {
+                    // Меняем режим просмотра на "region"
+                    setMapMode("region");
+
+                    // Устанавливаем выбранный регион
+                    setSelectedRegion(region);
+
+                    // Сбрасываем выбранную локацию и закрываем панель
+                    setSelectedLocation(null);
+                    setIsDetailPanelOpen(false);
+                }, 100);
             }
         } else {
             // Если выбрана локация на карте региона
             const location = filteredLocations.find((l) => l.id === node.id);
             if (location) {
-                setSelectedLocation(location);
-                setIsDetailPanelOpen(true);
+                // Получить свежую информацию о локации перед отображением в панели
+                if (characterStore.selectedCharacter) {
+                    locationStore
+                        .getLocationDetails(
+                            location.id,
+                            characterStore.selectedCharacter.id
+                        )
+                        .then((freshLocation) => {
+                            if (freshLocation) {
+                                setSelectedLocation(freshLocation);
+                            } else {
+                                setSelectedLocation(location);
+                            }
+                            setIsDetailPanelOpen(true);
+                        })
+                        .catch(() => {
+                            // В случае ошибки, используем имеющиеся данные
+                            setSelectedLocation(location);
+                            setIsDetailPanelOpen(true);
+                        });
+                } else {
+                    setSelectedLocation(location);
+                    setIsDetailPanelOpen(true);
+                }
             }
         }
     };
@@ -246,6 +525,19 @@ const WorldMap: React.FC<WorldMapProps> = observer(({ characterId }) => {
             <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col">
                 {/* Верхняя панель с GameHeader */}
                 <GameHeader activeLocationName={currentLocation?.name} />
+
+                {/* Показываем сообщение об ошибке соединения, если оно есть */}
+                {connectionErrorMessage && (
+                    <div className="bg-red-900/30 border border-red-900/50 p-3 text-center text-red-300 mb-2 mx-4 mt-2 rounded">
+                        {connectionErrorMessage}
+                        <button
+                            className="ml-2 text-red-400 hover:text-red-300 underline text-sm"
+                            onClick={() => setConnectionErrorMessage(null)}
+                        >
+                            Закрыть
+                        </button>
+                    </div>
+                )}
 
                 {/* Основная область карты */}
                 <div className="flex-1 flex overflow-hidden">
@@ -394,6 +686,7 @@ const WorldMap: React.FC<WorldMapProps> = observer(({ characterId }) => {
                     <div className="flex-1 relative bg-gray-900">
                         {/* GameMap компонент для отрисовки карты */}
                         <GameMap
+                            key={`${mapMode}-${selectedRegion?.id || "world"}`}
                             mapMode={mapMode}
                             regionId={selectedRegion?.id}
                             characterId={charId}
@@ -487,36 +780,93 @@ const WorldMap: React.FC<WorldMapProps> = observer(({ characterId }) => {
 
                                     {/* Кнопки действий */}
                                     <div className="space-y-2 mt-6">
-                                        <button
-                                            className={`w-full py-2 px-4 rounded-md text-sm flex justify-center items-center ${
-                                                selectedLocation.is_current
-                                                    ? "bg-gray-700 text-gray-400 cursor-not-allowed"
-                                                    : selectedLocation.is_accessible
-                                                    ? "bg-red-900 hover:bg-red-800 text-white"
-                                                    : "bg-gray-700 text-gray-400 cursor-not-allowed"
-                                            }`}
-                                            disabled={
-                                                !selectedLocation.is_accessible ||
-                                                selectedLocation.is_current
-                                            }
-                                        >
-                                            {selectedLocation.is_current
-                                                ? "Вы находитесь здесь"
-                                                : "Путешествовать в локацию"}
-                                        </button>
-
-                                        {!selectedLocation.is_accessible && (
-                                            <div className="mt-2 p-2 bg-red-900/20 rounded-md border border-red-900/30">
-                                                <h4 className="text-xs text-red-400 font-semibold mb-1">
-                                                    Требования не выполнены:
-                                                </h4>
-                                                <p className="text-xs text-gray-300">
-                                                    {selectedLocation
-                                                        .accessibility_issue
-                                                        ?.description ||
-                                                        "Локация недоступна"}
-                                                </p>
+                                        {/* Проверяем, является ли выбранная локация текущей */}
+                                        {currentLocation &&
+                                        currentLocation.id ===
+                                            selectedLocation.id ? (
+                                            <div className="bg-gray-700 text-gray-300 py-2 px-4 rounded-md text-sm flex justify-center items-center font-bold">
+                                                ВЫ НАХОДИТЕСЬ ЗДЕСЬ
                                             </div>
+                                        ) : (
+                                            <>
+                                                <button
+                                                    className={`w-full py-2 px-4 rounded-md text-sm flex justify-center items-center ${
+                                                        selectedLocation.is_accessible &&
+                                                        currentLocation &&
+                                                        findLocationConnection(
+                                                            currentLocation.id,
+                                                            selectedLocation.id,
+                                                            locationConnections
+                                                        )
+                                                            ? "bg-red-900 hover:bg-red-800 text-white"
+                                                            : "bg-gray-700 text-gray-400 cursor-not-allowed"
+                                                    }`}
+                                                    disabled={
+                                                        !selectedLocation.is_accessible ||
+                                                        !currentLocation ||
+                                                        !findLocationConnection(
+                                                            currentLocation.id,
+                                                            selectedLocation.id,
+                                                            locationConnections
+                                                        )
+                                                    }
+                                                    onClick={() => {
+                                                        if (
+                                                            selectedLocation.is_accessible &&
+                                                            characterStore.selectedCharacter &&
+                                                            currentLocation
+                                                        ) {
+                                                            handleTravelSetup(
+                                                                selectedLocation
+                                                            );
+                                                        }
+                                                    }}
+                                                >
+                                                    ПУТЕШЕСТВОВАТЬ В ЛОКАЦИЮ
+                                                </button>
+
+                                                {!selectedLocation.is_accessible && (
+                                                    <div className="mt-2 p-2 bg-red-900/20 rounded-md border border-red-900/30">
+                                                        <h4 className="text-xs text-red-400 font-semibold mb-1">
+                                                            ТРЕБОВАНИЯ НЕ
+                                                            ВЫПОЛНЕНЫ:
+                                                        </h4>
+                                                        <p className="text-xs text-gray-300">
+                                                            {selectedLocation
+                                                                .accessibility_issue
+                                                                ?.description ||
+                                                                "ЛОКАЦИЯ НЕДОСТУПНА"}
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {selectedLocation.is_accessible &&
+                                                    currentLocation &&
+                                                    !findLocationConnection(
+                                                        currentLocation.id,
+                                                        selectedLocation.id,
+                                                        locationConnections
+                                                    ) && (
+                                                        <div className="mt-2 p-2 bg-red-900/20 rounded-md border border-red-900/30">
+                                                            <h4 className="text-xs text-red-400 font-semibold mb-1">
+                                                                НЕТ ПРЯМОГО
+                                                                ПУТИ:
+                                                            </h4>
+                                                            <p className="text-xs text-gray-300">
+                                                                Между вашей
+                                                                текущей локацией
+                                                                и{" "}
+                                                                {
+                                                                    selectedLocation.name
+                                                                }{" "}
+                                                                нет прямого
+                                                                пути. Выберите
+                                                                другую локацию
+                                                                для путешествия.
+                                                            </p>
+                                                        </div>
+                                                    )}
+                                            </>
                                         )}
                                     </div>
                                 </div>
@@ -524,6 +874,21 @@ const WorldMap: React.FC<WorldMapProps> = observer(({ characterId }) => {
                     </div>
                 </div>
             </div>
+
+            {/* Модальное окно для путешествия */}
+            {currentLocation && selectedTargetLocation && isTravelModalOpen && (
+                <TravelModal
+                    isOpen={isTravelModalOpen}
+                    fromLocation={currentLocation}
+                    toLocation={selectedTargetLocation}
+                    travelTime={travelTime}
+                    baseTravelTime={baseTravelTime}
+                    savedTime={savedTime}
+                    onComplete={completeTravelToLocation}
+                    onCancel={cancelTravel}
+                    isLocationPreloaded={isLocationPreloaded}
+                />
+            )}
         </>
     );
 });

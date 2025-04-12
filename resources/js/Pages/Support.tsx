@@ -317,8 +317,6 @@ const Support: React.FC = () => {
                 formData
             );
 
-            console.log("Ответ сервера:", response.data);
-
             // Успешная отправка
             setSubmitSuccess(true);
 

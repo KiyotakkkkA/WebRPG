@@ -1,27 +1,21 @@
-import React, { useEffect, useState, Fragment } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { observer } from "mobx-react-lite";
 import characterStore from "../../stores/CharacterStore";
 import locationStore, {
     Location,
     LocationObject,
-    LocationsLoadResult,
     LocationConnection,
 } from "../../stores/LocationStore";
-import journalStore, { JournalEntry } from "../../stores/JournalStore";
+import journalStore from "../../stores/JournalStore";
 import Button from "../../Components/ui/Button";
 import {
-    objectTypeIcons,
-    objectIconMap,
-    actionIcons,
     ProfileIcon,
     ExploreIcon,
     LeaveIcon,
 } from "../../Components/ui/GameIcons";
 import NpcInteractionModal from "../../Components/game/NpcInteractionModal";
 import CombatModal from "../../Components/game/CombatModal";
-import { Dialog, Transition } from "@headlessui/react";
-import { runInAction } from "mobx";
 import TravelModal from "../../Components/game/TravelModal";
 import axios from "axios";
 import GameHeader from "../../Layouts/GameHeader";
@@ -31,8 +25,17 @@ import {
     useMutation,
     QueryClient,
     QueryClientProvider,
-    UseMutationResult,
 } from "@tanstack/react-query";
+import LocationsList from "../../Components/game/location/LocationsList";
+import LocationObjects from "../../Components/game/location/LocationObjects";
+import LocationRequirementsModal from "../../Components/game/location/LocationRequirements";
+import JournalPanel from "../../Components/game/JournalPanel";
+// Импортируем функции для работы с перемещением из модуля travel
+import {
+    setupTravel,
+    findLocationConnection,
+    preloadLocationData,
+} from "../../scripts/travel";
 
 // Интерфейс для врага
 interface Enemy {
@@ -53,286 +56,11 @@ interface Enemy {
     }[];
 }
 
-// Компонент для отображения игрового объекта
-const GameObjectItem: React.FC<{
-    object: LocationObject;
-    onClick: (object: LocationObject) => void;
-}> = ({ object, onClick }) => {
-    const icon =
-        objectIconMap[object.id as keyof typeof objectIconMap] ||
-        objectTypeIcons[object.type as keyof typeof objectTypeIcons];
-
-    return (
-        <div
-            className="flex items-center space-x-2 p-2 hover:bg-gray-800/60 rounded-md cursor-pointer border border-transparent hover:border-red-900/30 transition-colors"
-            onClick={() => onClick(object)}
-        >
-            <span className="text-gray-400 w-6">
-                {icon || <span className="text-xl">{object.icon}</span>}
-            </span>
-            <span className="text-sm text-gray-300">{object.name}</span>
-        </div>
-    );
-};
-
-// Компонент для отображения требований локации
-const LocationRequirement: React.FC<{
-    requirement: {
-        type: string;
-        parameter: string;
-        value: number | string;
-        description: string;
-        fulfilled: boolean;
-        current_value?: number | string;
-    };
-}> = ({ requirement }) => {
-    // Иконки для различных типов требований
-    const requirementIcons: Record<string, string> = {
-        level: "⭐",
-        quest: "📜",
-        skill: "⚔️",
-        gold: "💰",
-        item: "🎒",
-        attribute: "💪",
-        strength: "💪",
-        agility: "🏃",
-        intelligence: "🧠",
-        vitality: "❤️",
-        luck: "🍀",
-        charisma: "👄",
-        wisdom: "📚",
-        dexterity: "✋",
-        constitution: "🛡️",
-    };
-
-    // Локализация названий атрибутов
-    const getAttributeName = (attribute: string): string => {
-        const attributeNames: Record<string, string> = {
-            level: "Уровень",
-            quest: "Квест",
-            skill: "Навык",
-            gold: "Золото",
-            item: "Предмет",
-            attribute: "Атрибут",
-            strength: "Сила",
-            agility: "Ловкость",
-            intelligence: "Интеллект",
-            vitality: "Выносливость",
-            luck: "Удача",
-            charisma: "Харизма",
-            wisdom: "Мудрость",
-            dexterity: "Проворство",
-            constitution: "Телосложение",
-        };
-
-        return attributeNames[attribute] || attribute;
-    };
-
-    // Формирование читаемого текста требования
-    const getRequirementText = (): string => {
-        // Используем уже подготовленное описание, если оно есть
-        if (requirement.description) {
-            return requirement.description;
-        }
-
-        // Если описания нет, формируем его на основе типа требования и параметра
-        if (requirement.type === "attribute") {
-            const attributeName = getAttributeName(requirement.parameter);
-            return `${attributeName} ${requirement.value}`;
-        } else {
-            // Для других типов требований
-            return `${getAttributeName(requirement.type)} ${requirement.value}`;
-        }
-    };
-
-    return (
-        <div
-            className={`text-xs flex items-center ${
-                requirement.fulfilled ? "text-green-400" : "text-red-400"
-            }`}
-        >
-            <span className="mr-1">
-                {requirementIcons[requirement.type] ||
-                    requirementIcons[requirement.parameter] ||
-                    "❓"}
-            </span>
-            <span>{getRequirementText()}</span>
-            {requirement.current_value !== undefined && (
-                <span className="ml-1 font-medium">
-                    ({requirement.current_value}/{requirement.value})
-                </span>
-            )}
-        </div>
-    );
-};
-
-// Модальное окно с требованиями локации
-const LocationRequirementsModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    location: Location | null;
-}> = ({ isOpen, onClose, location }) => {
-    if (!location) return null;
-
-    return (
-        <Transition appear show={isOpen} as={Fragment}>
-            <Dialog as="div" className="relative z-50" onClose={onClose}>
-                <Transition.Child
-                    as={Fragment}
-                    enter="ease-out duration-300"
-                    enterFrom="opacity-0"
-                    enterTo="opacity-100"
-                    leave="ease-in duration-200"
-                    leaveFrom="opacity-100"
-                    leaveTo="opacity-0"
-                >
-                    <div className="fixed inset-0 bg-black bg-opacity-70" />
-                </Transition.Child>
-
-                <div className="fixed inset-0 overflow-y-auto">
-                    <div className="flex min-h-full items-center justify-center p-4 text-center">
-                        <Transition.Child
-                            as={Fragment}
-                            enter="ease-out duration-300"
-                            enterFrom="opacity-0 scale-95"
-                            enterTo="opacity-100 scale-100"
-                            leave="ease-in duration-200"
-                            leaveFrom="opacity-100 scale-100"
-                            leaveTo="opacity-0 scale-95"
-                        >
-                            <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-md bg-gray-900 border border-red-900/40 p-6 text-left align-middle shadow-xl transition-all">
-                                <Dialog.Title
-                                    as="h3"
-                                    className="text-lg font-medieval text-red-500 text-center mb-4"
-                                >
-                                    Локация недоступна: {location.name}
-                                </Dialog.Title>
-                                <div className="mt-2">
-                                    <p className="text-sm text-gray-400 mb-4">
-                                        Для доступа к этой локации необходимо
-                                        выполнить следующие условия:
-                                    </p>
-                                    <div className="space-y-2 bg-gray-800/60 p-3 rounded-md border border-gray-700/60">
-                                        {location.requirements &&
-                                        location.requirements.length > 0 ? (
-                                            location.requirements.map(
-                                                (req, idx) => (
-                                                    <LocationRequirement
-                                                        key={idx}
-                                                        requirement={req}
-                                                    />
-                                                )
-                                            )
-                                        ) : (
-                                            <p className="text-xs text-gray-500">
-                                                Нет доступных данных о
-                                                требованиях
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="mt-6 flex justify-center">
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={onClose}
-                                    >
-                                        Понятно
-                                    </Button>
-                                </div>
-                            </Dialog.Panel>
-                        </Transition.Child>
-                    </div>
-                </div>
-            </Dialog>
-        </Transition>
-    );
-};
-
-// Компонент для отображения локации
-const LocationItem: React.FC<{
-    location: Location;
-    onClick: (location: Location) => void;
-    isActive: boolean;
-    onShowRequirements: (location: Location) => void;
-}> = ({ location, onClick, isActive, onShowRequirements }) => {
-    return (
-        <div
-            className={`p-2 rounded-md cursor-pointer transition-colors ${
-                isActive
-                    ? "bg-red-900/30 border border-red-800/50"
-                    : "hover:bg-gray-800/60 border border-transparent hover:border-red-900/30"
-            }`}
-            onClick={() => {
-                if (location.is_accessible) {
-                    onClick(location);
-                } else {
-                    onShowRequirements(location);
-                }
-            }}
-        >
-            <div className="flex items-center justify-between">
-                <span
-                    className={`text-sm ${
-                        location.is_accessible
-                            ? "text-red-400"
-                            : "text-gray-500"
-                    }`}
-                >
-                    {location.name}
-                </span>
-                {!location.is_accessible && (
-                    <span className="text-xs text-red-500 ml-auto">⚠</span>
-                )}
-            </div>
-            {location.region && (
-                <div className="text-xs text-gray-500 mt-1">
-                    <span className="opacity-70">{location.region.name}</span>
-                </div>
-            )}
-        </div>
-    );
-};
-
-// Компонент для отображения записи в журнале
-const JournalEntryItem: React.FC<{ entry: JournalEntry }> = ({ entry }) => {
-    // Определяем стиль и иконку в зависимости от типа записи
-    const getEntryStyle = (type: JournalEntry["type"]) => {
-        switch (type) {
-            case "location":
-                return { color: "text-blue-400", icon: "➤" };
-            case "item":
-                return { color: "text-green-400", icon: "✓" };
-            case "combat":
-                return { color: "text-red-400", icon: "⚔️" };
-            case "quest":
-                return { color: "text-yellow-400", icon: "📜" };
-            case "error":
-                return { color: "text-red-500", icon: "✗" };
-            case "system":
-            default:
-                return { color: "text-gray-400", icon: "•" };
-        }
-    };
-
-    const style = getEntryStyle(entry.type);
-    const time = journalStore.formatEntryTime(entry.timestamp);
-
-    return (
-        <div className={`mb-1 ${style.color}`}>
-            <span className="text-gray-600 mr-1">{style.icon}</span>
-            <span className="text-gray-500 text-xs mr-1">[{time}]</span>
-            {entry.text}
-        </div>
-    );
-};
-
 // Вспомогательная функция для формирования правильного URL изображения
 const getImageUrl = (imagePath: string) => {
     if (!imagePath)
         return (
-            window.location.origin + "/images/locations/fallback-location.jpg"
+            window.location.origin + "/images/locations/fallback_location.jpg"
         );
 
     // Если путь уже начинается с http или https, оставляем как есть
@@ -384,13 +112,8 @@ const TutorialModal: React.FC<{
         },
     ];
 
-    const handleClose = async () => {
-        try {
-            // Отправляем запрос на сброс флага is_new
-            await axios.post("/api/characters/tutorial-completed", {
-                character_id: characterId,
-            });
-        } catch (error) {}
+    // Упрощаем метод handleClose, убирая прямой запрос axios
+    const handleClose = () => {
         onClose();
     };
 
@@ -439,7 +162,7 @@ const TutorialModal: React.FC<{
                                             e: React.SyntheticEvent<HTMLImageElement>
                                         ) => {
                                             (e.target as HTMLImageElement).src =
-                                                "/images/fallback-location.jpg";
+                                                "/images/locations/fallback_location.jpg";
                                         }}
                                     />
                                 </div>
@@ -799,15 +522,6 @@ const GameInterface: React.FC = observer(() => {
         },
     });
 
-    // useQuery для получения деталей локации для предзагрузки
-    const getLocationDetailsQuery = (locationId: number, characterId: number) =>
-        useQuery({
-            queryKey: ["locationDetails", locationId, characterId],
-            queryFn: () =>
-                locationStore.getLocationDetails(locationId, characterId),
-            enabled: false, // Запрос не активен по умолчанию, вызываем вручную
-        });
-
     // Загружаем персонажа игрока и доступные локации
     useEffect(() => {
         setLoading(true);
@@ -1009,58 +723,26 @@ const GameInterface: React.FC = observer(() => {
         connection: LocationConnection | undefined,
         location: Location
     ) => {
-        // Получаем скорость персонажа
-        const characterSpeed = characterStore.selectedCharacter!.speed || 10;
-
-        // Базовое время перемещения из соединения или по умолчанию
-        let baseTravelTime = connection ? connection.travel_time : 10;
-
-        // Расчет времени с учетом скорости персонажа
-        // Новая формула: max(3, time - time*(1 - speed/100))
-        const speedModifier = characterSpeed / 100;
-        let calculatedTime = Math.round(
-            baseTravelTime - baseTravelTime * speedModifier
-        );
-
-        // Минимальное время перемещения - 3 секунды
-        const finalTravelTime = Math.max(3, calculatedTime);
-
-        // Расчет сэкономленного времени
-        const savedTime = baseTravelTime - finalTravelTime;
+        // Используем функцию setupTravel для расчета времени перемещения
+        const travelSetup = setupTravel(connection, location);
 
         // Начинаем предзагрузку локации
         setIsLocationPreloaded(false);
         setSelectedTargetLocation(location);
-        setTravelTime(finalTravelTime);
-        setBaseTravelTime(baseTravelTime);
-        setSavedTime(savedTime);
+        setTravelTime(travelSetup.travelTime);
+        setBaseTravelTime(travelSetup.baseTravelTime);
+        setSavedTime(travelSetup.savedTime);
         setIsTravelModalOpen(true);
 
-        // Предзагружаем данные локации с использованием React Query
+        // Предзагружаем данные локации, если есть выбранный персонаж
         if (characterStore.selectedCharacter) {
-            queryClient
-                .prefetchQuery({
-                    queryKey: [
-                        "locationDetails",
-                        location.id,
-                        characterStore.selectedCharacter.id,
-                    ],
-                    queryFn: () =>
-                        locationStore.getLocationDetails(
-                            location.id,
-                            characterStore.selectedCharacter!.id
-                        ),
-                    staleTime: 5 * 60 * 1000, // Кэшируем на 5 минут
-                })
-                .then(() => {
-                    setIsLocationPreloaded(true);
-                })
-                .catch((error: unknown) => {
-                    console.error(
-                        "Ошибка при предзагрузке данных локации:",
-                        error
-                    );
-                });
+            preloadLocationData(
+                location,
+                characterStore.selectedCharacter.id,
+                queryClient
+            ).then((isLoaded: boolean) => {
+                setIsLocationPreloaded(isLoaded);
+            });
         }
     };
 
@@ -1321,28 +1003,6 @@ const GameInterface: React.FC = observer(() => {
         }
     };
 
-    // Функция для завершения туториала
-    const handleTutorialComplete = () => {
-        if (characterStore.selectedCharacter) {
-            // Используем метод из CharacterStore с колбэком для инвалидации
-            characterStore.completeTutorial(
-                characterStore.selectedCharacter.id,
-                () => {
-                    // Инвалидируем данные персонажа после завершения туториала
-                    queryClient.invalidateQueries({
-                        queryKey: [
-                            "character",
-                            characterStore.selectedCharacter!.id,
-                        ],
-                    });
-                    setShowTutorial(false);
-                }
-            );
-        } else {
-            setShowTutorial(false);
-        }
-    };
-
     // Отображаем загрузку
     if (loading) {
         return (
@@ -1433,90 +1093,15 @@ const GameInterface: React.FC = observer(() => {
                         )}
                     </div>
                     <div className="p-2 space-y-2 flex-1 game-panel overflow-y-auto">
-                        {locationStore.availableLocations
-                            .filter(
-                                (location) =>
-                                    location.is_accessible_from_current &&
-                                    !location.is_current
-                            )
-                            .map((location) => (
-                                <LocationItem
-                                    key={location.id}
-                                    location={location}
-                                    onClick={handleLocationSelect}
-                                    isActive={
-                                        activeLocation?.id === location.id
-                                    }
-                                    onShowRequirements={
-                                        handleShowLocationRequirements
-                                    }
-                                />
-                            ))}
-                        {locationStore.availableLocations.filter(
-                            (location) =>
-                                location.is_accessible_from_current &&
-                                !location.is_current
-                        ).length === 0 && (
-                            <div className="text-sm text-gray-500 text-center p-4">
-                                <div className="font-medieval text-red-500">
-                                    Нет доступных локаций для перехода
-                                </div>
-                                <div className="mt-3 text-xs text-gray-500">
-                                    Пожалуйста, исследуйте текущую локацию,
-                                    чтобы открыть путь в новые области
-                                </div>
-                                {/* Отладочная информация - в продакшене можно убрать */}
-                                <div className="mt-4 text-xs text-gray-600 border-t border-gray-800 pt-2">
-                                    <div>
-                                        Всего локаций:{" "}
-                                        {
-                                            locationStore.availableLocations
-                                                .length
-                                        }
-                                    </div>
-                                    <div>
-                                        Текущая локация:{" "}
-                                        {activeLocation?.name || "Нет"}
-                                    </div>
-                                    <div className="mt-1 text-left">
-                                        <div className="text-xs font-bold text-gray-500 mb-1">
-                                            Все локации:
-                                        </div>
-                                        {locationStore.availableLocations.map(
-                                            (loc) => (
-                                                <div
-                                                    key={loc.id}
-                                                    className="text-left px-2 text-xs text-gray-600 border-b border-gray-800 pb-1 mb-1"
-                                                >
-                                                    <div>
-                                                        {loc.name} (ID: {loc.id}
-                                                        )
-                                                    </div>
-                                                    <div className="ml-2">
-                                                        {loc.is_current && (
-                                                            <span className="text-blue-500">
-                                                                Текущая
-                                                            </span>
-                                                        )}
-                                                        {loc.is_accessible_from_current ? (
-                                                            <span className="text-green-500 ml-2">
-                                                                Доступна для
-                                                                перехода
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-red-500 ml-2">
-                                                                Недоступна для
-                                                                перехода
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                        <LocationsList
+                            availableLocations={
+                                locationStore.availableLocations
+                            }
+                            activeLocationId={activeLocation?.id || null}
+                            onLocationSelect={handleLocationSelect}
+                            onShowRequirements={handleShowLocationRequirements}
+                            showAccessibleOnly={true}
+                        />
                     </div>
 
                     <div className="p-3 border-t border-red-900/40 mt-auto bg-gray-900/70">
@@ -1609,19 +1194,10 @@ const GameInterface: React.FC = observer(() => {
                         </h3>
                     </div>
                     <div className="p-2 flex-1 space-y-1 game-panel overflow-y-auto">
-                        {activeLocation?.objects ? (
-                            activeLocation.objects.map((object, index) => (
-                                <GameObjectItem
-                                    key={`${object.id}-${index}`}
-                                    object={object}
-                                    onClick={handleObjectSelect}
-                                />
-                            ))
-                        ) : (
-                            <div className="text-sm text-gray-500 text-center p-4">
-                                В этой локации нет объектов
-                            </div>
-                        )}
+                        <LocationObjects
+                            objects={activeLocation?.objects}
+                            onObjectSelect={handleObjectSelect}
+                        />
                     </div>
                 </div>
             </div>
@@ -1660,76 +1236,22 @@ const GameInterface: React.FC = observer(() => {
                 </div>
 
                 <div className="w-64 p-3 flex flex-col">
-                    <div className="flex items-center justify-between mb-1">
-                        <div className="text-xs text-gray-400 font-medieval">
-                            Журнал событий:
-                        </div>
-                        <div className="flex space-x-1">
-                            <button
-                                className="text-xs text-gray-500 hover:text-gray-300 transition-colors focus:outline-none"
-                                title="Обновить журнал"
-                                onClick={() => {
-                                    journalStore.addEntry(
-                                        "Журнал обновлен",
-                                        "system"
-                                    );
-                                }}
-                            >
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    className="h-3.5 w-3.5"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                                    />
-                                </svg>
-                            </button>
-                            <button
-                                className="text-xs text-gray-500 hover:text-red-400 transition-colors focus:outline-none"
-                                title="Очистить журнал"
-                                onClick={() => {
-                                    if (confirm("Очистить журнал событий?")) {
-                                        journalStore.clearJournal();
-                                        journalStore.addEntry(
-                                            "Журнал очищен",
-                                            "system"
-                                        );
-                                    }
-                                }}
-                            >
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    className="h-3.5 w-3.5"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                    />
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div className="flex-1 overflow-y-auto text-xs bg-gray-900/70 p-2 rounded-md border border-red-900/30 game-panel">
-                        {journalStore.getLastEntries(15).map((entry) => (
-                            <JournalEntryItem key={entry.id} entry={entry} />
-                        ))}
-                        {journalStore.entries.length === 0 && (
-                            <div className="text-gray-600 text-center p-2">
-                                Журнал событий пуст
-                            </div>
-                        )}
-                    </div>
+                    <JournalPanel
+                        entries={journalStore.entries}
+                        onClear={() => {
+                            if (confirm("Очистить журнал событий?")) {
+                                journalStore.clearJournal();
+                                journalStore.addEntry(
+                                    "Журнал очищен",
+                                    "system"
+                                );
+                            }
+                        }}
+                        onRefresh={() => {
+                            journalStore.addEntry("Журнал обновлен", "system");
+                        }}
+                        entriesLimit={15}
+                    />
                 </div>
             </div>
 
@@ -1803,7 +1325,17 @@ const GameInterface: React.FC = observer(() => {
             {characterStore.selectedCharacter && (
                 <TutorialModal
                     isOpen={showTutorial}
-                    onClose={handleTutorialComplete}
+                    onClose={() => {
+                        if (characterStore.selectedCharacter) {
+                            // Вместо handleTutorialComplete используем мутацию completeTutorial
+                            completeTutorial({
+                                characterId:
+                                    characterStore.selectedCharacter.id,
+                            });
+                        } else {
+                            setShowTutorial(false);
+                        }
+                    }}
                     characterName={characterStore.selectedCharacter.name}
                     characterId={characterStore.selectedCharacter.id}
                 />

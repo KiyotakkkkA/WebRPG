@@ -160,7 +160,7 @@ const TravelModal: React.FC<TravelModalProps> = ({
         if (!imagePath)
             return (
                 window.location.origin +
-                "/images/locations/fallback-location.jpg"
+                "/images/locations/fallback_location.jpg"
             );
 
         // Если путь уже начинается с http или https, оставляем как есть
@@ -347,7 +347,7 @@ const TravelModal: React.FC<TravelModalProps> = ({
                             onError={(e) => {
                                 (e.target as HTMLImageElement).src =
                                     window.location.origin +
-                                    "/images/locations/fallback-location.jpg";
+                                    "/images/locations/fallback_location.jpg";
                             }}
                         />
                     </div>
@@ -362,7 +362,7 @@ const TravelModal: React.FC<TravelModalProps> = ({
                             onError={(e) => {
                                 (e.target as HTMLImageElement).src =
                                     window.location.origin +
-                                    "/images/locations/fallback-location.jpg";
+                                    "/images/locations/fallback_location.jpg";
                             }}
                         />
                     </div>
