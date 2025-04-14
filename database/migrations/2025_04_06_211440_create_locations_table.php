@@ -74,7 +74,6 @@ return new class extends Migration
             $table->id();
             $table->foreignId('location_id');
             $table->foreignId('resource_id')->comment('Ссылка на ID ресурса из таблицы resources или другой');
-            $table->string('name');
             $table->float('spawn_chance')->default(1.0)->comment('Вероятность появления ресурса (0.0-1.0)');
             $table->integer('min_amount')->default(1);
             $table->integer('max_amount')->default(1);

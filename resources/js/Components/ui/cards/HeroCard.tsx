@@ -1,7 +1,7 @@
 import React from "react";
-import Button from "./Button";
-import Tooltip from "./Tooltip";
-import { StatTooltipContent } from "./StatTooltips";
+import Button from "../Button";
+import Tooltip from "../Tooltip";
+import { StatTooltipContent } from "../StatTooltips";
 
 interface HeroCardProps {
     title: string;

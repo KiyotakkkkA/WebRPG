@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Character extends Model
 {
@@ -86,6 +87,26 @@ class Character extends Model
     public function currentLocation(): BelongsTo
     {
         return $this->belongsTo(Location::class, 'current_location_id');
+    }
+
+    /**
+     * Получить локации, открытые персонажем.
+     */
+    public function discoveredLocations(): BelongsToMany
+    {
+        return $this->belongsToMany(Location::class, 'character_discovered_locations')
+            ->withPivot(['discovered_at'])
+            ->withTimestamps();
+    }
+
+    /**
+     * Получить ресурсы, открытые персонажем.
+     */
+    public function discoveredResources(): BelongsToMany
+    {
+        return $this->belongsToMany(Resource::class, 'character_discovered_resources')
+            ->withPivot(['discovered_at', 'gather_count', 'last_gathered_at'])
+            ->withTimestamps(false);
     }
 
     /**

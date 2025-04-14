@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import MainLayout from "../Layouts/MainLayout";
 import Button from "../Components/ui/Button";
-import NewsCard from "../Components/ui/NewsCard";
+import NewsCard from "../Components/ui/cards/NewsCard";
 import { observer } from "mobx-react-lite";
 import authStore from "../stores/AuthStore";
 import characterStore from "../stores/CharacterStore";

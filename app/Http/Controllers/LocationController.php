@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Character;
 use App\Models\Location;
 use App\Models\LocationRequirement;
+use App\Models\Resource;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -24,8 +25,6 @@ class LocationController extends Controller
                 'message' => 'Персонаж не указан',
             ], 400);
         }
-
-        \Log::debug("Запрос на получение доступных локаций для персонажа ID: {$characterId}");
 
         $character = Character::findOrFail($characterId);
 
@@ -50,11 +49,8 @@ class LocationController extends Controller
             ], 404);
         }
 
-        \Log::debug("Текущая локация персонажа: {$currentLocation->id} ({$currentLocation->name})");
-
         // Получаем все локации, в которые можно перейти
         $allConnectedLocations = $currentLocation->getAllAccessibleLocations();
-        \Log::debug("Все доступные для перехода локации: " . $allConnectedLocations->pluck('id')->implode(', '));
 
         // Получаем все открытые локации для персонажа
         $discoveredLocations = DB::table('character_discovered_locations')
@@ -62,12 +58,9 @@ class LocationController extends Controller
             ->pluck('location_id')
             ->toArray();
 
-        \Log::debug("Открытые локации для персонажа: " . implode(', ', $discoveredLocations));
-
         // Добавляем текущую локацию к списку открытых
         if (!in_array($currentLocation->id, $discoveredLocations)) {
             $discoveredLocations[] = $currentLocation->id;
-            \Log::debug("Добавлена текущая локация {$currentLocation->id} в список открытых");
         }
 
         // Добавляем все соседние локации в список локаций для отображения
@@ -75,19 +68,15 @@ class LocationController extends Controller
         $allLocationIds = array_merge($discoveredLocations, $connectedLocationIds);
         $allLocationIds = array_unique($allLocationIds);
 
-        \Log::debug("Все локации для отображения: " . implode(', ', $allLocationIds));
 
         // Получаем полную информацию обо всех локациях
         $locations = Location::with(['requirements', 'objects', 'resources', 'events', 'region'])
             ->whereIn('id', $allLocationIds)
             ->get();
 
-        \Log::debug("Найдено локаций: " . $locations->count());
-
         $locations = $locations->map(function ($location) use ($character, $currentLocation, $allConnectedLocations, $discoveredLocations) {
             // Доступна ли локация для перехода из текущей
             $isAccessibleFromCurrent = $allConnectedLocations->contains('id', $location->id);
-            \Log::debug("Локация {$location->id} ({$location->name}) доступна для перехода: " . ($isAccessibleFromCurrent ? 'да' : 'нет'));
 
             // Присваиваем значение полю is_accessible_from_current
             $location->is_accessible_from_current = $isAccessibleFromCurrent;
@@ -99,14 +88,12 @@ class LocationController extends Controller
             if ($location->id == $currentLocation->id) {
                 $location->is_accessible_from_current = false;
                 $location->is_current = true;
-                \Log::debug("Локация {$location->id} является текущей, устанавливаем is_accessible_from_current в false");
             } else {
                 $location->is_current = false;
             }
 
             // Проверяем требования для доступа
             $location->is_accessible = $location->isAccessibleBy($character);
-            \Log::debug("Локация {$location->id} ({$location->name}) доступна по требованиям: " . ($location->is_accessible ? 'да' : 'нет'));
 
             // Если локация недоступна, получаем причину
             if (!$location->is_accessible) {
@@ -123,8 +110,6 @@ class LocationController extends Controller
 
             return $location;
         });
-
-        \Log::debug("Возвращаем {$locations->count()} локаций");
 
         return response()->json([
             'current_location' => $currentLocation,
@@ -346,6 +331,210 @@ class LocationController extends Controller
             return response()->json([
                 'message' => 'Не удалось получить соединения между локациями',
                 'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Получить ресурсы доступные в текущей локации персонажа
+     */
+    public function getLocationResources(Request $request)
+    {
+        $characterId = $request->input('character_id');
+
+        if (!$characterId) {
+            return response()->json([
+                'message' => 'Персонаж не указан',
+            ], 400);
+        }
+
+        $character = Character::findOrFail($characterId);
+
+        // Проверяем, принадлежит ли персонаж текущему пользователю
+        if ($character->user_id !== Auth::id()) {
+            return response()->json([
+                'message' => 'Доступ запрещен',
+            ], 403);
+        }
+
+        // Получаем текущую локацию персонажа
+        $currentLocation = $character->current_location_id
+            ? Location::find($character->current_location_id)
+            : Location::where('is_default', true)->first();
+
+        if (!$currentLocation) {
+            return response()->json([
+                'message' => 'Персонаж не находится ни в одной локации',
+            ], 404);
+        }
+
+        // Получаем ресурсы текущей локации с учетом их свойств
+        $resources = $currentLocation->resources()
+            ->with(['discoveredByCharacters' => function($query) use ($character) {
+                $query->where('character_id', $character->id);
+            }])
+            ->get()
+            ->map(function($resource) use ($character) {
+                // Добавляем информацию, найден ресурс или нет
+                $resourceData = $resource->toArray();
+                $resourceData['discovered'] = $resource->discoveredByCharacters->isNotEmpty();
+
+                // Если ресурс не обнаружен, скрываем некоторую информацию
+                if (!$resourceData['discovered']) {
+                    // Оставляем только базовую информацию
+                    unset($resourceData['properties']);
+                }
+
+                return $resourceData;
+            });
+
+        return response()->json([
+            'resources' => $resources,
+            'location' => [
+                'id' => $currentLocation->id,
+                'name' => $currentLocation->name
+            ]
+        ]);
+    }
+
+    /**
+     * Отметить ресурс как обнаруженный персонажем
+     */
+    public function discoverResource(Request $request)
+    {
+        \Log::info('Запрос на открытие ресурса', $request->all());
+
+        $characterId = $request->input('character_id');
+        $resourceId = $request->input('resource_id');
+
+        if (!$characterId || !$resourceId) {
+            \Log::error('Не указаны обязательные параметры', [
+                'character_id' => $characterId,
+                'resource_id' => $resourceId
+            ]);
+
+            return response()->json([
+                'message' => 'Необходимо указать персонажа и ресурс',
+            ], 400);
+        }
+
+        try {
+            $character = Character::findOrFail($characterId);
+
+            // Проверяем, принадлежит ли персонаж текущему пользователю
+            if ($character->user_id !== Auth::id()) {
+                \Log::warning('Попытка доступа к чужому персонажу', [
+                    'character_id' => $characterId,
+                    'character_user_id' => $character->user_id,
+                    'current_user_id' => Auth::id()
+                ]);
+
+                return response()->json([
+                    'message' => 'Доступ запрещен',
+                ], 403);
+            }
+
+            $resource = Resource::findOrFail($resourceId);
+            \Log::info('Ресурс найден', [
+                'resource_id' => $resourceId,
+                'resource_name' => $resource->name
+            ]);
+
+            // Проверяем, доступен ли ресурс в текущей локации персонажа
+            $currentLocation = $character->currentLocation;
+            if (!$currentLocation) {
+                \Log::error('Персонаж не находится в локации', [
+                    'character_id' => $characterId
+                ]);
+
+                return response()->json([
+                    'message' => 'Персонаж не находится ни в одной локации',
+                ], 404);
+            }
+
+            $isResourceAvailable = $currentLocation->resources()
+                ->where('resources.id', $resourceId)
+                ->exists();
+
+            if (!$isResourceAvailable) {
+                \Log::warning('Ресурс недоступен в текущей локации', [
+                    'resource_id' => $resourceId,
+                    'location_id' => $currentLocation->id,
+                    'location_name' => $currentLocation->name
+                ]);
+
+                return response()->json([
+                    'message' => 'Ресурс недоступен в текущей локации',
+                ], 400);
+            }
+
+            // Комментируем проверку комбинации элементов, так как она выполняется на клиенте
+            // Клиент отправляет запрос только если комбинация верна
+            // $elementCombination = $request->input('element_combination', []);
+            // if (!$resource->checkElementCombination($elementCombination)) {
+            //     return response()->json([
+            //         'message' => 'Неверная комбинация элементов',
+            //         'success' => false
+            //     ]);
+            // }
+
+            // Отмечаем ресурс как обнаруженный или обновляем счетчик добычи
+            $alreadyDiscovered = $character->discoveredResources()
+                ->where('resources.id', $resourceId)
+                ->exists();
+
+            if ($alreadyDiscovered) {
+                // Если ресурс уже открыт, увеличиваем счетчик добычи
+                \Log::info('Обновление счетчика добычи для уже открытого ресурса', [
+                    'resource_id' => $resourceId,
+                    'character_id' => $characterId
+                ]);
+
+                // Заменяем updateExistingPivot на прямой SQL запрос
+                DB::table('character_discovered_resources')
+                    ->where('character_id', $characterId)
+                    ->where('resource_id', $resourceId)
+                    ->update([
+                        'gather_count' => DB::raw('gather_count + 1'),
+                        'last_gathered_at' => now()
+                    ]);
+            } else {
+                // Если ресурс открывается впервые
+                \Log::info('Ресурс открывается впервые', [
+                    'resource_id' => $resourceId,
+                    'character_id' => $characterId
+                ]);
+
+                // Заменяем метод attach() на прямое создание записи в pivot-таблице
+                DB::table('character_discovered_resources')->insert([
+                    'character_id' => $characterId,
+                    'resource_id' => $resourceId,
+                    'discovered_at' => now(),
+                    'gather_count' => 1,
+                    'last_gathered_at' => now()
+                ]);
+            }
+
+            \Log::info('Ресурс успешно обработан', [
+                'resource_id' => $resourceId,
+                'already_discovered' => $alreadyDiscovered
+            ]);
+
+            return response()->json([
+                'message' => $alreadyDiscovered ? 'Ресурс успешно добыт' : 'Ресурс успешно обнаружен',
+                'resource' => $resource,
+                'success' => true
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Ошибка при обработке ресурса', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Произошла ошибка при обработке ресурса',
+                'success' => false
             ], 500);
         }
     }

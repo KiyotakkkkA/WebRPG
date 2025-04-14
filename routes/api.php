@@ -7,11 +7,13 @@ use App\Http\Controllers\StatisticsController;
 use App\Http\Controllers\LocationController;
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Admin\AdminLocationController;
+use App\Http\Controllers\Admin\AdminResourceController;
 use App\Http\Controllers\RegionController;
 use App\Http\Controllers\SupportMessageController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\MapController;
+use App\Http\Controllers\ElementController;
 
 // Маршрут для обновления CSRF-токена
 Route::get('/refresh-csrf', function () {
@@ -47,10 +49,18 @@ Route::middleware(['web', 'auth:sanctum'])->group(function () {
     Route::get('/locations/{location}', [LocationController::class, 'getLocation']);
     Route::post('/locations/move', [LocationController::class, 'moveToLocation']);
 
+    // Маршруты для работы с ресурсами
+    Route::get('/location-resources', [LocationController::class, 'getLocationResources']);
+    Route::post('/resources/discover', [LocationController::class, 'discoverResource']);
+
     // Маршруты для службы поддержки
     Route::post('/support-messages', [SupportMessageController::class, 'store']);
     Route::get('/my-support-messages', [SupportMessageController::class, 'getUserMessages']);
     Route::post('/support-messages/{id}/rate', [SupportMessageController::class, 'rate']);
+
+    // Маршруты для получения элементов (публичные)
+    Route::get('/elements', [ElementController::class, 'getElements']);
+    Route::get('/elements/{id}', [ElementController::class, 'getElement']);
 });
 
 // Маршруты для авторизованных сотрудников поддержки и администраторов
@@ -99,6 +109,19 @@ Route::middleware(['web', 'auth:sanctum', 'role:admin'])->prefix('admin')->group
     Route::post('/location-requirements', [AdminLocationController::class, 'createRequirement']);
     Route::put('/location-requirements/{requirement}', [AdminLocationController::class, 'updateRequirement']);
     Route::delete('/location-requirements/{requirement}', [AdminLocationController::class, 'deleteRequirement']);
+
+    // Управление ресурсами
+    Route::get('/resources', [AdminResourceController::class, 'index']);
+    Route::post('/resources', [AdminResourceController::class, 'store']);
+    Route::get('/resources/{resource}', [AdminResourceController::class, 'show']);
+    Route::put('/resources/{resource}', [AdminResourceController::class, 'update']);
+    Route::delete('/resources/{resource}', [AdminResourceController::class, 'destroy']);
+
+    // Управление элементами для рунической матрицы
+    Route::get('/elements', [AdminResourceController::class, 'manageElements']);
+    Route::post('/elements', [AdminResourceController::class, 'storeElement']);
+    Route::put('/elements/{element}', [AdminResourceController::class, 'updateElement']);
+    Route::delete('/elements/{element}', [AdminResourceController::class, 'destroyElement']);
 });
 
 // Маршруты для карты

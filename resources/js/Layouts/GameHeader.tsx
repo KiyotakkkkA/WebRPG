@@ -40,7 +40,7 @@ const GameHeader: React.FC<GameHeaderProps> = observer(
         // Проверяем состояние загрузки и наличие персонажа
         if (characterStore.isLoading) {
             return (
-                <div className="h-24 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border-b border-red-900/60 flex items-center justify-center px-6 py-3 shadow-lg">
+                <div className="h-24 bg-gray-900 border-b border-red-900/60 flex items-center justify-center px-6 py-3 shadow-lg">
                     <div className="text-red-400 font-medieval animate-pulse">
                         Загрузка данных персонажа...
                     </div>
@@ -50,7 +50,7 @@ const GameHeader: React.FC<GameHeaderProps> = observer(
 
         if (!characterStore.selectedCharacter) {
             return (
-                <div className="h-24 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border-b border-red-900/60 flex items-center justify-center px-6 py-3 shadow-lg">
+                <div className="h-24 bg-gray-900 border-b border-red-900/60 flex items-center justify-center px-6 py-3 shadow-lg">
                     <div className="text-red-400 font-medieval">
                         Персонаж не загружен.
                         <button
@@ -67,9 +67,9 @@ const GameHeader: React.FC<GameHeaderProps> = observer(
         const character = characterStore.selectedCharacter;
 
         return (
-            <div className="h-24 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border-b border-red-900/60 flex items-center px-6 py-3 justify-between shadow-lg">
+            <div className="h-24 bg-gray-900 border-b border-red-900/60 flex items-center px-6 py-3 justify-between shadow-lg relative z-50">
                 {/* Аватар и имя персонажа */}
-                <div className="flex items-center bg-gray-900/60 p-2 rounded-lg border border-red-900/40 shadow-md">
+                <div className="flex items-center bg-gray-900 p-2 rounded-lg border border-red-900/40 shadow-md">
                     <div className="relative mr-3">
                         <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-red-800 shadow-lg">
                             <img
@@ -100,7 +100,7 @@ const GameHeader: React.FC<GameHeaderProps> = observer(
                 </div>
 
                 {/* Основной блок ресурсов (здоровье, мана, выносливость) */}
-                <div className="flex-1 max-w-md mx-6 space-y-1 bg-gray-900/60 p-3 rounded-lg border border-red-900/40 shadow-md">
+                <div className="flex-1 max-w-md mx-6 space-y-1 bg-gray-900 p-3 rounded-lg border border-red-900/40 shadow-md">
                     <ResourceBar
                         current={character.health}
                         max={character.max_health}
@@ -125,7 +125,7 @@ const GameHeader: React.FC<GameHeaderProps> = observer(
                 <div className="w-48 mx-4 space-y-2">
                     {/* Блок скорости */}
                     <div
-                        className="bg-gray-900/60 px-3 py-1 rounded text-xs text-gray-300 border border-gray-700 flex items-center justify-between shadow-md"
+                        className="bg-gray-900 px-3 py-1 rounded text-xs text-gray-300 border border-gray-700 flex items-center justify-between shadow-md"
                         title="Скорость перемещения влияет на время путешествия между локациями"
                     >
                         <span className="flex items-center">
@@ -138,7 +138,7 @@ const GameHeader: React.FC<GameHeaderProps> = observer(
                     </div>
 
                     {/* Полоса опыта (использует метод из CharacterStore) */}
-                    <div className="bg-gray-900/60 px-2 py-1 rounded border border-gray-700 shadow-md">
+                    <div className="bg-gray-900 px-2 py-1 rounded border border-gray-700 shadow-md">
                         <div className="flex justify-between text-xs text-gray-400 mb-1">
                             <span>Опыт:</span>
                             <span className="text-yellow-400">
@@ -176,6 +176,7 @@ const GameHeader: React.FC<GameHeaderProps> = observer(
                     <button
                         className="bg-gradient-to-b from-gray-800 to-gray-900 border border-red-900/40 rounded-md p-2 hover:from-gray-700 hover:to-gray-800 transition-all shadow-md group"
                         title="Инвентарь"
+                        onClick={() => navigate(`/inventory/${character.id}`)}
                     >
                         <div className="flex flex-col items-center">
                             <span className="text-xl text-red-500 group-hover:text-red-400">
@@ -189,6 +190,7 @@ const GameHeader: React.FC<GameHeaderProps> = observer(
                     <button
                         className="bg-gradient-to-b from-gray-800 to-gray-900 border border-red-900/40 rounded-md p-2 hover:from-gray-700 hover:to-gray-800 transition-all shadow-md group"
                         title="Способности и навыки"
+                        onClick={() => navigate(`/skills/${character.id}`)}
                     >
                         <div className="flex flex-col items-center">
                             <span className="text-xl text-red-500 group-hover:text-red-400">
@@ -196,6 +198,20 @@ const GameHeader: React.FC<GameHeaderProps> = observer(
                             </span>
                             <span className="text-xs text-gray-400 mt-1 group-hover:text-gray-300">
                                 Навыки
+                            </span>
+                        </div>
+                    </button>
+                    <button
+                        className="bg-gradient-to-b from-gray-800 to-gray-900 border border-red-900/40 rounded-md p-2 hover:from-gray-700 hover:to-gray-800 transition-all shadow-md group"
+                        title="Добыча ресурсов"
+                        onClick={() => navigate(`/gathering/${character.id}`)}
+                    >
+                        <div className="flex flex-col items-center">
+                            <span className="text-xl text-red-500 group-hover:text-red-400">
+                                ⛏️
+                            </span>
+                            <span className="text-xs text-gray-400 mt-1 group-hover:text-gray-300">
+                                Добыча
                             </span>
                         </div>
                     </button>
@@ -218,11 +234,11 @@ const GameHeader: React.FC<GameHeaderProps> = observer(
                 {/* Валюта */}
                 <div className="grid grid-cols-2 gap-2 ml-4 w-32">
                     {/* Блок золота */}
-                    <div className="bg-gray-900/60 px-3 py-1 rounded text-xs text-gray-300 border border-gray-700 flex items-center shadow-md">
+                    <div className="bg-gray-900 px-3 py-1 rounded text-xs text-gray-300 border border-gray-700 flex items-center shadow-md">
                         <span className="text-yellow-500 mr-2">💰</span> 0
                     </div>
                     {/* Блок алмазов */}
-                    <div className="bg-gray-900/60 px-3 py-1 rounded text-xs text-gray-300 border border-gray-700 flex items-center shadow-md">
+                    <div className="bg-gray-900 px-3 py-1 rounded text-xs text-gray-300 border border-gray-700 flex items-center shadow-md">
                         <span className="text-red-500 mr-2">💎</span> 0
                     </div>
                 </div>

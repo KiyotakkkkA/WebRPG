@@ -108,9 +108,11 @@ class Location extends Model
     /**
      * Получить ресурсы, доступные в локации.
      */
-    public function resources(): HasMany
+    public function resources()
     {
-        return $this->hasMany(LocationResource::class);
+        return $this->belongsToMany(Resource::class, 'location_resources')
+            ->withPivot(['spawn_chance', 'min_amount', 'max_amount'])
+            ->withTimestamps();
     }
 
     /**
@@ -169,30 +171,25 @@ class Location extends Model
         try {
             // Прямые связи (куда можно перейти напрямую)
             $directConnections = $this->connectedLocations;
-            \Log::debug("Прямые связи из локации {$this->id} ({$this->name}): " . $directConnections->pluck('id')->implode(', '));
 
             // Обратные связи (откуда можно вернуться при двусторонней связи)
             $reverseConnections = $this->connectedFrom()
                 ->wherePivot('is_bidirectional', true) // Только двусторонние связи
                 ->get();
-            \Log::debug("Обратные двусторонние связи к локации {$this->id} ({$this->name}): " . $reverseConnections->pluck('id')->implode(', '));
 
             // Проверяем данные в pivot для обратных связей
             $pivotData = DB::table('location_connections')
                 ->where('to_location_id', $this->id)
                 ->where('is_bidirectional', true)
                 ->get();
-            \Log::debug("Данные pivot для обратных связей: " . json_encode($pivotData));
 
             // Объединяем коллекции и удаляем дубликаты (если локация есть и в прямых, и в обратных связях)
             $allConnections = $directConnections->merge($reverseConnections)->unique('id');
-            \Log::debug("Все доступные локации из {$this->id} ({$this->name}) после объединения: " . $allConnections->pluck('id')->implode(', '));
 
             // Убеждаемся, что в коллекции нет текущей локации
             $allConnections = $allConnections->filter(function ($location) {
                 return $location->id !== $this->id;
             });
-            \Log::debug("Конечный список доступных локаций (без текущей): " . $allConnections->pluck('id')->implode(', '));
 
             return $allConnections;
         } catch (\Exception $e) {

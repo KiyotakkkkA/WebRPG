@@ -14,6 +14,12 @@ interface MovementNavGroupProps {
     isActive: (path: string) => boolean;
 }
 
+// Интерфейс для группы навигации предметов
+interface ItemsNavGroupProps {
+    isSidebarOpen: boolean;
+    isActive: (path: string) => boolean;
+}
+
 const MovementNavGroup: React.FC<MovementNavGroupProps> = ({
     isSidebarOpen,
     isActive,
@@ -21,7 +27,8 @@ const MovementNavGroup: React.FC<MovementNavGroupProps> = ({
     const [isExpanded, setIsExpanded] = useState(
         isActive("/admin/locations") ||
             isActive("/admin/location-connections") ||
-            isActive("/admin/location-requirements")
+            isActive("/admin/location-requirements") ||
+            isActive("/admin/regions")
     );
 
     // Автоматически раскрывать меню, если пользователь находится на одной из страниц
@@ -29,7 +36,8 @@ const MovementNavGroup: React.FC<MovementNavGroupProps> = ({
         if (
             isActive("/admin/locations") ||
             isActive("/admin/location-connections") ||
-            isActive("/admin/location-requirements")
+            isActive("/admin/location-requirements") ||
+            isActive("/admin/regions")
         ) {
             setIsExpanded(true);
         }
@@ -41,7 +49,8 @@ const MovementNavGroup: React.FC<MovementNavGroupProps> = ({
                 className={`flex items-center p-2 rounded-md hover:bg-gray-700 cursor-pointer ${
                     isActive("/admin/locations") ||
                     isActive("/admin/location-connections") ||
-                    isActive("/admin/location-requirements")
+                    isActive("/admin/location-requirements") ||
+                    isActive("/admin/regions")
                         ? "bg-red-900/30 text-red-300"
                         : ""
                 }`}
@@ -220,6 +229,135 @@ const MovementNavGroup: React.FC<MovementNavGroupProps> = ({
     );
 };
 
+// Группа навигации для раздела "Предметы"
+const ItemsNavGroup: React.FC<ItemsNavGroupProps> = ({
+    isSidebarOpen,
+    isActive,
+}) => {
+    const [isExpanded, setIsExpanded] = useState(
+        isActive("/admin/resources") || isActive("/admin/elements")
+    );
+
+    // Автоматически раскрывать меню, если пользователь находится на одной из страниц
+    useEffect(() => {
+        if (isActive("/admin/resources") || isActive("/admin/elements")) {
+            setIsExpanded(true);
+        }
+    }, [isActive]);
+
+    return (
+        <li>
+            <div
+                className={`flex items-center p-2 rounded-md hover:bg-gray-700 cursor-pointer ${
+                    isActive("/admin/resources")
+                        ? "bg-red-900/30 text-red-300"
+                        : ""
+                }`}
+                onClick={() => setIsExpanded(!isExpanded)}
+            >
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-5 w-5 mr-3"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                >
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+                    />
+                </svg>
+                {isSidebarOpen && (
+                    <div className="flex justify-between items-center w-full">
+                        <span>Предметы</span>
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className={`h-4 w-4 transition-transform ${
+                                isExpanded ? "rotate-90" : ""
+                            }`}
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M9 5l7 7-7 7"
+                            />
+                        </svg>
+                    </div>
+                )}
+            </div>
+
+            {isSidebarOpen && (
+                <ul
+                    className={`ml-8 border-l border-gray-700 pl-2 overflow-hidden transition-all duration-300 ease-in-out ${
+                        isExpanded
+                            ? "max-h-96 opacity-100 mt-2 py-2 space-y-2"
+                            : "max-h-0 opacity-0 mt-0 py-0 space-y-0"
+                    }`}
+                >
+                    <li>
+                        <Link
+                            to="/admin/elements"
+                            className={`flex items-center p-2 rounded-md ${
+                                isActive("/admin/elements")
+                                    ? "bg-red-900/30 text-red-300"
+                                    : "hover:bg-gray-700"
+                            }`}
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4 mr-2"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                                />
+                            </svg>
+                            <span>Элементы</span>
+                        </Link>
+                    </li>
+                    <li>
+                        <Link
+                            to="/admin/resources"
+                            className={`flex items-center p-2 rounded-md ${
+                                isActive("/admin/resources")
+                                    ? "bg-red-900/30 text-red-300"
+                                    : "hover:bg-gray-700"
+                            }`}
+                        >
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-4 w-4 mr-2"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+                                />
+                            </svg>
+                            <span>Ресурсы</span>
+                        </Link>
+                    </li>
+                </ul>
+            )}
+        </li>
+    );
+};
+
 const AdminLayout: React.FC<AdminLayoutProps> = observer(
     ({ children, pageTitle }) => {
         const location = useLocation();
@@ -320,6 +458,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = observer(
                                 </Link>
                             </li>
                             <MovementNavGroup
+                                isSidebarOpen={isSidebarOpen}
+                                isActive={isActive}
+                            />
+                            <ItemsNavGroup
                                 isSidebarOpen={isSidebarOpen}
                                 isActive={isActive}
                             />

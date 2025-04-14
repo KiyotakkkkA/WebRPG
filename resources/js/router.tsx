@@ -10,11 +10,14 @@ import Register from "./Pages/Auth/Register";
 import CreateCharacter from "./Pages/Character/CreateCharacter";
 import CharacterProfile from "./Pages/Character/CharacterProfile";
 import GameInterface from "./Pages/Game/GameInterface";
+import GatheringGame from "./Pages/Game/GatheringGame";
 import AdminDashboard from "./Pages/Admin/AdminDashboard";
-import AdminLocations from "./Pages/Admin/AdminLocations";
-import AdminLocationConnections from "./Pages/Admin/AdminLocationConnections";
-import AdminLocationRequirements from "./Pages/Admin/AdminLocationRequirements";
-import AdminRegions from "./Pages/Admin/AdminRegions";
+import AdminLocations from "./Pages/Admin/movement/AdminLocations";
+import AdminLocationConnections from "./Pages/Admin/movement/AdminLocationConnections";
+import AdminLocationRequirements from "./Pages/Admin/movement/AdminLocationRequirements";
+import AdminRegions from "./Pages/Admin/movement/AdminRegions";
+import AdminResources from "./Pages/Admin/items/AdminResources";
+import AdminElements from "./Pages/Admin/items/AdminElements";
 import TermsOfService from "./Pages/TermsOfService";
 import Support from "./Pages/Support";
 import SupportMessages from "./Pages/SupportAdmin/SupportMessages";
@@ -167,6 +170,22 @@ const MRouter: React.FC = () => {
                         </AdminRoute>
                     }
                 />
+                <Route
+                    path="/admin/resources"
+                    element={
+                        <AdminRoute>
+                            <AdminResources />
+                        </AdminRoute>
+                    }
+                />
+                <Route
+                    path="/admin/elements"
+                    element={
+                        <AdminRoute>
+                            <AdminElements />
+                        </AdminRoute>
+                    }
+                />
 
                 {/* Новый маршрут для WorldMap */}
                 <Route
@@ -174,6 +193,16 @@ const MRouter: React.FC = () => {
                     element={
                         <PrivateRoute>
                             <WorldMap />
+                        </PrivateRoute>
+                    }
+                />
+
+                {/* Новый маршрут для мини-игры добычи ресурсов */}
+                <Route
+                    path="/gathering/:characterId"
+                    element={
+                        <PrivateRoute>
+                            <GatheringGame />
                         </PrivateRoute>
                     }
                 />

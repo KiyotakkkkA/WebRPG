@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import MainLayout from "../../Layouts/MainLayout";
 import Button from "../../Components/ui/Button";
-import HeroCard from "../../Components/ui/HeroCard";
+import HeroCard from "../../Components/ui/cards/HeroCard";
 import { observer } from "mobx-react-lite";
 import characterStore from "../../stores/CharacterStore";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
